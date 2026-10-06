@@ -81,7 +81,7 @@ class Status:
         finally:
             with self.lock:
                 self.human = None
-        return ok
+        return ok and not self.cancelled()  # «Остановить» будит ожидание, но это не «Готово»
 
     def snapshot(self):
         with self.lock:
@@ -448,6 +448,14 @@ class Collector:
                     m.finish("skipped")
                     info["edge"] = {"error": str(e)}
                     self.warn(f"{title} (сайт): {e}", "edge.not_prepared")
+                    return
+                except guard.Blocked as pb:  # 429 ещё на подготовке — та же пауза, что и при сборе
+                    until = guard.blocked(con, site, "edge", pb.detail or pb.reason, pb.retry_after)
+                    m.finish("blocked")
+                    info["edge"] = {"error": f"на паузе до {_hm(until)}: {pb.detail or pb.reason}"}
+                    self.warn(
+                        f"{title} (сайт): {pb.detail or pb.reason} — сеть на паузе до {_hm(until)}", "edge.blocked"
+                    )
                     return
                 if city:
                     expect_city = city

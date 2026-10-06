@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -258,6 +259,31 @@ class ScheduleTime(unittest.TestCase):
         self.assertEqual(schedule._decode("Ошибка".encode("cp866")), "Ошибка")
 
 
+class ConnectionPool(unittest.TestCase):
+    def test_requests_reuse_connections(self):
+        app = server.App()
+        self.addCleanup(app.close)
+        httpd = server.serve(app, 0)
+        self.addCleanup(httpd.server_close)
+        self.addCleanup(httpd.shutdown)
+        url = f"http://127.0.0.1:{httpd.server_address[1]}"
+        opened = []
+        real = db.connect
+
+        def counting(path):
+            opened.append(path)
+            return real(path)
+
+        with mock.patch.object(db, "connect", side_effect=counting):
+            for _ in range(10):
+                req = urllib.request.Request(url + "/api/kinds", headers={"X-Token": app.token})
+                with urllib.request.urlopen(req, timeout=5) as r:
+                    self.assertEqual(r.status, 200)
+        self.assertLessEqual(len(opened), 1)  # десять запросов подряд — одно соединение из пула
+        with urllib.request.urlopen(url + "/favicon.ico", timeout=5) as r:
+            self.assertEqual(r.status, 204)  # значок без ключа — не 403 в консоли окна
+
+
 class KindCache(unittest.TestCase):
     def test_result_is_a_copy(self):
         a = kinds.attrs("Клей плиточный Основит Плитэкс C1 25 кг")
@@ -272,6 +298,7 @@ class ProductsCatalog(unittest.TestCase):
 
     def setUp(self):
         self.app = server.App()
+        self.addCleanup(self.app.close)
         con = self.app.con
         con.execute("DELETE FROM products")
         run = db.start_run(con)

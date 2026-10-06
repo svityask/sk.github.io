@@ -127,6 +127,7 @@ def run_window(port: int = 0) -> int:
     except KeyboardInterrupt:
         pass
     httpd.shutdown()
+    app.close()
     log.info("app.stop", "Окно приложения закрыто")
     return 0
 

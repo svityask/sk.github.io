@@ -51,6 +51,19 @@ class Matching(unittest.TestCase):
         cut30 = {"url": "", "name": "Штукатурка Основит Гипсвелл 30 кг"}
         self.assertEqual(self.index.match(cut30), ("lemanapro:82065432", "название и фасовка"))
 
+    def test_own_code_not_in_feed_is_another_product(self):
+        """Тот же текст названия, но на полке свой артикул, которого нет в фиде, — другой товар, не склеиваем."""
+        f = dict(FOUND["lemanapro:22222222"], url="https://lemanapro.ru/product/kley-cerezit-22222222/")
+        index = match.FeedIndex("lemanapro", {"lemanapro:22222222": f})
+        other = {"url": "https://lemanapro.ru/product/kley-cerezit-seryy-99999999/", "name": f["name"]}
+        self.assertEqual(index.match(other), (None, None))
+        no_code = {"url": "", "name": f["name"]}
+        self.assertEqual(index.match(no_code)[0], "lemanapro:22222222")
+        # в фиде нет адреса товара (ключ по id предложения) — сравнить артикулы нельзя, сопоставляем по названию
+        g = dict(f, url="")
+        index = match.FeedIndex("lemanapro", {"lemanapro:22222222": g})
+        self.assertEqual(index.match(other)[0], "lemanapro:22222222")
+
     def test_edge_items_are_not_feed(self):
         self.assertNotIn("lemanapro:edge1", self.index.items)
         self.assertEqual(self.index.match({"name": "Не из фида"}), (None, None))

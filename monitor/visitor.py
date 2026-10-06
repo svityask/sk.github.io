@@ -245,6 +245,8 @@ class Visitor:
             float(self.s.get("wait_human_s") or 300),
         )
         self.tab.show_window(False)
+        if not ok and self.status.cancelled():
+            raise Stop("сбор остановлен вами")  # остановили — это не отказ сайта, на паузу не ставим
         page = self.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or {}
         if not ok or extract.is_check_page(page):
             self._dump(reason, url, status, page)
@@ -274,6 +276,8 @@ class Visitor:
                     float(self.s.get("wait_prepare_s") or 600),
                 )
                 if not ok:
+                    if self.status.cancelled():
+                        raise Stop("сбор остановлен вами")
                     raise Stop("окно сбора не подготовили — сайт пропущен в этот раз")
                 page = self.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or {}
                 if extract.is_check_page(page):
