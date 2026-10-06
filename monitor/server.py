@@ -372,6 +372,7 @@ class App:
                     "categories": len(feed.categories),
                     "date": feed.date,
                     "no_price": feed.no_price,
+                    "tracker_links": feed.tracker_links,
                     "sample": sample,
                     "status": meta.get("status"),
                 }
@@ -579,8 +580,15 @@ def make_handler(app):
                         target = os.path.realpath(target)
                         if os.path.dirname(target) != os.path.realpath(dumps.folder()):
                             return self._send(400, {"error": "можно открыть только папку дампа"})
-                    elif not (target.endswith(".xlsx") and os.path.dirname(target) == config.report_dir(config.load())):
-                        return self._send(400, {"error": "можно открыть только отчёт"})
+                    else:
+                        folders = {
+                            os.path.realpath(d)
+                            for d in (config.load().get("report_dir"), config.default_report_dir())
+                            if d
+                        }
+                        target = os.path.realpath(target) if target else ""
+                        if not (target.endswith(".xlsx") and os.path.dirname(target) in folders):
+                            return self._send(400, {"error": "можно открыть только отчёт"})
                     return self._send(200, {"ok": open_path(target)})
                 if p == "/api/schedule":
                     return self._send(

@@ -26,33 +26,54 @@ SITES: dict[str, dict[str, Any]] = {
 }
 
 # Партнёрские сети заворачивают ссылку на товар в свою: настоящий адрес лежит в параметре.
-_WRAP_PARAMS = ("ulp", "url", "u", "to", "redirect", "redirect_url", "target", "dl")
+# Сначала смотрим известные параметры, потом — любой параметр, в котором лежит адрес сети.
+_WRAP_PARAMS = ("ulp", "url", "u", "to", "goto", "redirect", "redirect_url", "target", "dl", "deeplink", "murl", "link")
 
 
 def unwrap_link(url):
-    """Достаёт настоящий адрес товара из партнёрской ссылки (Admitad ulp=, «Где Слон?» и т. п.)."""
+    """Достаёт настоящий адрес товара из партнёрской ссылки (Admitad ulp=, «Где Слон?» goto= и т. п.)."""
     if not url:
         return ""
     url = url.strip()
     for _ in range(3):  # бывает двойная обёртка
-        parts = urlsplit(url)
-        host = parts.netloc.lower()
         if site_of(url):
             break
-        qs = parse_qs(parts.query)
-        inner = None
-        for key in _WRAP_PARAMS:
-            for value in qs.get(key, []):
-                value = unquote(value)
-                if value.startswith(("http://", "https://")) and site_of(value):
-                    inner = value
-                    break
-            if inner:
-                break
-        if not inner or not host:
+        parts = urlsplit(url)
+        if not parts.netloc:
+            break
+        qs = parse_qs(parts.query) or {}
+        if parts.fragment and "=" in parts.fragment:
+            qs = {**parse_qs(parts.fragment), **qs}
+        keys = [k for k in _WRAP_PARAMS if k in qs] + [k for k in qs if k not in _WRAP_PARAMS]
+        inner = next(
+            (
+                v
+                for k in keys
+                for v in (_decode(x) for x in qs[k])
+                if v.startswith(("http://", "https://")) and _inner(v)
+            ),
+            None,
+        )
+        if not inner:
             break
         url = inner
     return url
+
+
+def _decode(value):
+    """Значение параметра: иногда адрес закодирован дважды («https%253A%252F%252F…»)."""
+    for _ in range(2):
+        if value.startswith(("http://", "https://")):
+            break
+        value = unquote(value)
+    return value
+
+
+def _inner(url):
+    """Адрес сети — или ещё одна обёртка, внутри которой он лежит."""
+    return bool(site_of(url)) or any(
+        site_of(_decode(v)) for vals in parse_qs(urlsplit(url).query).values() for v in vals
+    )
 
 
 def site_of(url):

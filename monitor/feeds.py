@@ -75,7 +75,14 @@ def fetch(
         st = os.stat(source)
         if meta.get("source") != source or meta.get("mtime") != st.st_mtime or not os.path.exists(path):
             shutil.copyfile(source, path)
-        meta.update(source=source, mtime=st.st_mtime, fetched_at=time.time(), size=os.path.getsize(path), status="файл")
+        meta.update(
+            source=source,
+            mtime=st.st_mtime,
+            fetched_at=time.time(),
+            size=os.path.getsize(path),
+            status="файл",
+            stale=False,  # прошлая неудачная загрузка по ссылке к файлу на диске не относится
+        )
         _save_json(meta_path, meta)
         return path, meta
 
@@ -150,9 +157,19 @@ def fetch(
         _save_json(meta_path, meta)
         log.info("feed.not_modified", "Фид не изменился с прошлой загрузки")
         return path, meta
-    if os.path.getsize(tmp) < 64:
+    bad = "Сервер вернул пустой файл" if os.path.getsize(tmp) < 64 else _not_a_feed(tmp)
+    if bad:
+        # прошлый хороший файл не затираем: с ним сбор пройдёт, а причина будет в предупреждении
         os.remove(tmp)
-        raise FeedError("Сервер вернул пустой файл. Проверьте ссылку на фид в кабинете партнёрской сети.")
+        if meter:
+            meter.errors += 1
+        hint = f"{bad}. Проверьте ссылку на фид в кабинете партнёрской сети"
+        if meta.get("source") == source and os.path.exists(path):
+            meta["status"] = f"{hint}; взят прошлый файл"
+            meta["stale"] = True
+            log.warning("feed.not_a_feed", meta["status"])
+            return path, meta
+        raise FeedError(hint + ".")
     os.replace(tmp, path)
     meta.update(
         source=source,
@@ -183,6 +200,21 @@ def _http_hint(code):
     if code == 429:
         return "Сервер фида просит ходить реже (429). Следующая загрузка — по расписанию."
     return f"Сервер фида ответил {code}."
+
+
+def _not_a_feed(path):
+    """Причина, если скачалась не выгрузка товаров (страница входа, ошибка в JSON), иначе None."""
+    try:
+        with _open(path) as f:
+            head = f.read(4096)
+    except (OSError, zipfile.BadZipFile, EOFError, FeedError):
+        return "Скачанный файл фида не открывается (архив повреждён)"
+    text = head.decode("utf-8", "ignore").lstrip("\ufeff \r\n\t").lower()
+    if text.startswith(("<!doctype html", "<html")) or ("<html" in text[:1024] and "<yml_catalog" not in text):
+        return "Вместо фида сервер вернул веб-страницу (вход в кабинет или ошибка)"
+    if text.startswith(("{", "[")):
+        return "Вместо фида сервер вернул сообщение об ошибке (JSON)"
+    return None
 
 
 def _short(e):
@@ -245,6 +277,7 @@ class Feed:
         self.total = 0  # всего позиций в файле
         self.foreign = 0  # позиций с адресом чужой сети
         self.no_price = 0
+        self.tracker_links = 0  # ссылок, из которых не удалось достать адрес товара на сайте сети
 
     def chain(self, cat_id):
         """id категории и всех её родителей (от себя к корню)."""
@@ -280,6 +313,8 @@ def _local(tag):
 
 def _accept(feed, offer, want):
     feed.total += 1
+    if offer.pop("_tracker", False):
+        feed.tracker_links += 1
     if offer["url"] and sites.site_of(offer["url"]) not in (None, feed.site):
         feed.foreign += 1
         return
@@ -307,8 +342,14 @@ def _make_offer(
     params=None,
 ):
     real_url = sites.normalize_url(url) if url else ""
+    tracker = bool(real_url) and not sites.site_of(real_url)
+    if tracker:
+        # ссылка-счётчик партнёрской сети, из которой не достать адрес товара: адресом товара её не считаем —
+        # иначе сверка с сайтом открыла бы её в окне Edge (а это «переход по рекламе»)
+        real_url = ""
     code = sites.code_from_url(real_url) if real_url else None
     return {
+        "_tracker": tracker,
         "site": site,
         "key": sites.product_key(site, code=code, fallback_id=offer_id),
         "code": code or (str(offer_id).strip() if offer_id else ""),

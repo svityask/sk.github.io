@@ -313,11 +313,47 @@ def build(settings, con, run_id, products, market, review, stats, summary, group
         "robots.txt, проверку браузера проходит человек.",
     )
 
-    folder = config.report_dir(settings)
+    return save([ch, mk, asm, rv, dyn, cc, al, hs, dyn_data, sm], settings, summary)
+
+
+def _folder(settings, summary):
+    """Папка отчётов из настроек; недоступна (сетевой диск, флешка) — «Документы», с предупреждением."""
+    try:
+        return config.report_dir(settings)
+    except OSError as e:
+        fallback = config.default_report_dir()
+        os.makedirs(fallback, exist_ok=True)
+        summary.setdefault("warnings", []).append(
+            f"Папка отчётов недоступна ({settings.get('report_dir')}: {e.strerror or e}) — отчёт положен в {fallback}"
+        )
+        return fallback
+
+
+def save(sheets, settings, summary):
+    """Пишет отчёт во временный файл и только потом даёт ему имя.
+
+    Так оборванная запись не оставит битый .xlsx, а отчёт с тем же именем (два сбора за минуту, файл открыт
+    в Excel) не перезаписывается и не мешает: новому отчёту достаётся имя с номером «(2)», «(3)»…
+    """
+    folder = _folder(settings, summary)
     # strftime не получает кириллицу: на Windows с Python 3.10 это UnicodeEncodeError ('locale' codec)
-    path = os.path.join(folder, f"Цены Петрович и Лемана ПРО {datetime.now():%Y-%m-%d %H%M}.xlsx")
-    write(path, [ch, mk, asm, rv, dyn, cc, al, hs, dyn_data, sm])
-    return path
+    base = f"Цены Петрович и Лемана ПРО {datetime.now():%Y-%m-%d %H%M}"
+    tmp = os.path.join(folder, f"~{base}.{os.getpid()}.part")
+    try:
+        write(tmp, sheets)
+        for n in range(1, 100):
+            path = os.path.join(folder, f"{base}.xlsx" if n == 1 else f"{base} ({n}).xlsx")
+            if os.path.exists(path):
+                continue
+            try:
+                os.rename(tmp, path)  # не replace: в Windows rename не затрёт файл, появившийся только что
+                return path
+            except FileExistsError:
+                continue
+        raise OSError(f"в папке {folder} слишком много отчётов с именем «{base}»")
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 OURS_COLOR, MARKET_COLOR = "2A78D6", "EB6834"  # слоты 1 и 2 проверенной палитры; середина — пунктиром

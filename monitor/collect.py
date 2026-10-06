@@ -334,6 +334,7 @@ class Collector:
                 "format": feed.format,
                 "age_h": round(age_h, 1),
                 "categories": len(feed.categories),
+                "tracker_links": feed.tracker_links,
             }
             m.prices = len(found)
             log.info(
@@ -347,6 +348,13 @@ class Collector:
             if age_h > float(self.settings["review"].get("feed_age_h") or 36):
                 self.warn(
                     f"{title}: фиду {age_h:.0f} ч — сеть давно его не обновляла, цены могут отставать", "feed.old"
+                )
+            if feed.total and feed.tracker_links > feed.total / 2:
+                self.warn(
+                    f"{title}: ссылки в фиде не ведут на сайт сети ({feed.tracker_links} из {feed.total}) — "
+                    f"товары из списка по ссылке не найдутся, сверка с сайтом не проводится. "
+                    f"Возьмите в кабинете партнёрской сети ссылку на фид с прямыми адресами товаров",
+                    "feed.tracker_links",
                 )
             if cat_entries and not feed.offers:
                 m.empty += 1
@@ -624,7 +632,18 @@ class Collector:
             self._log_result()
             return s
         self.status.set("Готовлю отчёт Excel")
-        s["report"] = report.build(self.settings, con, self.run_id, products, market, review, stats, s, self.groups)
+        try:
+            s["report"] = report.build(self.settings, con, self.run_id, products, market, review, stats, s, self.groups)
+        except (sqlite3.DatabaseError, MemoryError):
+            raise
+        except Exception as e:  # цены уже записаны: без отчёта сбор всё равно удачный, отчёт можно сделать заново
+            s["report"] = None
+            self.warn(
+                f"Отчёт Excel не сохранился ({e.__class__.__name__}: {e}) — цены записаны, "
+                f"они видны в приложении; отчёт появится после следующего сбора",
+                "report.failed",
+                trace=traceback.format_exc()[-3000:],
+            )
         s["seconds"] = round(time.time() - self.started)
         db.finish_run(con, self.run_id, "готово", s)
         self.status.set(f"Готово: {len(products)} цен, изменений {len(s['changes'])}, на проверку {len(review)}")

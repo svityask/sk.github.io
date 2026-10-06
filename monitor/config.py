@@ -6,7 +6,7 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = "2.4.2"
+VERSION = "2.4.3"
 DATA = os.environ.get("OSNOVIT_DIY_DATA") or os.path.join(ROOT, "data")
 FEEDS_DIR = os.path.join(DATA, "feeds")
 SAMPLES_DIR = os.path.join(DATA, "samples")
@@ -141,11 +141,13 @@ def save(settings):
     return clean
 
 
+def default_report_dir():
+    home = os.path.expanduser("~")
+    docs = os.path.join(home, "Documents")
+    return os.path.join(docs if os.path.isdir(docs) else home, "Монитор Основит DIY")
+
+
 def report_dir(settings):
-    d = settings.get("report_dir")
-    if not d:
-        home = os.path.expanduser("~")
-        docs = os.path.join(home, "Documents")
-        d = os.path.join(docs if os.path.isdir(docs) else home, "Монитор Основит DIY")
+    d = settings.get("report_dir") or default_report_dir()
     os.makedirs(d, exist_ok=True)
     return d

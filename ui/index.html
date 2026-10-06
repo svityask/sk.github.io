@@ -1052,8 +1052,9 @@ async function runCheck(btn) {
       if (!f) box.innerHTML = `<div class="result bad">Сначала вставьте ссылку на фид.</div>`;
       else if (!f.ok) box.innerHTML = `<div class="result bad">${esc(f.error)}</div>`;
       else box.innerHTML = `<div class="result">Фид читается: формат ${esc(f.format)}, ${f.total} позиций, ${f.categories} категорий` +
-          (f.date ? `, выгрузка сети ${when(f.date)}` : "") + (f.no_price ? `, без цены ${f.no_price}` : "") +
-          `.<br>${f.sample.map(x => `<span class="muted">${esc(x.name)} — ${rub(x.price)}</span>`).join("<br>")}<br>Теперь выберите категории во вкладке «Что отслеживаем».</div>`;
+          (f.date ? `, выгрузка сети ${when(f.date)}` : "") + (f.no_price ? `, без цены ${f.no_price}` : "") + "." +
+          (f.tracker_links > f.total / 2 ? `<br><b>Ссылки в фиде не ведут на сайт сети</b> (${f.tracker_links} из ${f.total}): товары, добавленные ссылкой, не найдутся. Возьмите в кабинете ссылку на фид с прямыми адресами товаров.` : "") +
+          `<br>${f.sample.map(x => `<span class="muted">${esc(x.name)} — ${rub(x.price)}</span>`).join("<br>")}<br>Теперь выберите категории во вкладке «Что отслеживаем».</div>`;
     }
   } finally { btn.disabled = false; refresh(); }
 }

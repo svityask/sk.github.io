@@ -15,6 +15,7 @@ import gzip
 import json
 import os
 import random
+import subprocess
 import time
 import urllib.robotparser
 from typing import Any
@@ -71,9 +72,31 @@ class Visitor:
         return self._tab is not None
 
     def close(self):
-        if self._tab:
-            self._tab.close()
-        self._tab = None
+        """Закрывает вкладку сбора, а окно Edge — если его запустили мы.
+
+        Окно, которое уже было открыто (например, человек выбирал в нём город), не трогаем. Запущенное нами
+        окно стоит за краем экрана: если его не закрыть, оно так и висело бы невидимым после сбора
+        по расписанию, с открытым портом отладки.
+        """
+        tab, self._tab = self._tab, None
+        if self.proc is not None and tab is not None:
+            try:
+                tab.send("Browser.close", timeout=10)  # штатно: профиль (город, cookies) сохранится
+            except (cdp.BrowserError, OSError):
+                pass
+        if tab is not None:
+            tab.close()
+        proc, self.proc = self.proc, None
+        if proc is not None:
+            try:
+                proc.wait(15)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                try:
+                    proc.wait(10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            log.info("browser.closed", "Окно сбора закрыто")
 
     # ------------------------------------------------------------ шаги
 
@@ -310,7 +333,8 @@ class Visitor:
                     if not items or not nxt or nxt in visited or sites.site_of(nxt) != site:
                         break
                     url = nxt  # без normalize: номер страницы — в параметрах адреса
-            got = {it.get("code") for it in res["items"]} | {it.get("url") for it in res["items"]}
+            # пустой артикул или адрес не считается «уже найден» — иначе пропускались бы все карточки без артикула
+            got = {v for it in res["items"] for v in (it.get("code"), it.get("url")) if v}
             for gid, url, code in products:
                 url = sites.normalize_url(url)
                 if (code or sites.code_from_url(url)) in got or url in got:
@@ -319,6 +343,7 @@ class Visitor:
                 if it:
                     it["group_id"] = gid
                     res["items"].append(it)
+                    got |= {v for v in (it.get("code"), it.get("url")) if v}  # тот же товар второй раз не открываем
             # сверка фида с полкой: checks_n карточек из фида, кандидатов с запасом; страниц — не больше 2×checks_n
             tries = 0
             for key, url, code in checks:
@@ -332,6 +357,7 @@ class Visitor:
                 if it:
                     it["check_key"] = key
                     res["checks"].append(it)
+                    got |= {v for v in (it.get("code"), it.get("url")) if v}
         except Stop as e:
             res["stopped"] = str(e)
             res["failed"] = e.failed
