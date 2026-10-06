@@ -201,10 +201,25 @@ class Visitor:
         self._dump("429", url, status)
         raise guard.Blocked("429", retry_after, "сайт ответил 429 — слишком много запросов")
 
-    def _read(self, url, site, expect_city):
+    def _scroll(self, steps=3):
+        """Прокрутить выдачу на несколько экранов вниз: товары догружаются по мере прокрутки, как у человека."""
+        for _ in range(steps):
+            try:
+                self.tab.evaluate(extract.SCROLL_SCRIPT, timeout=10)
+            except cdp.BrowserError:
+                break
+            self.tab.pump(0.8)
+
+    def _parse(self, page, site):
+        network = self.tab.json_responses(sites.SITES[site]["data_hosts"])
+        return extract.products_from_page(page, network, site)
+
+    def _read(self, url, site, expect_city, listing=False):
         status = self._open(url)
         if status == 429:
             self._blocked_429(url, status)
+        if listing:
+            self._scroll()
         page = self.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or {}
         if extract.is_check_page(page, status):
             self.meter.captcha += 1
@@ -216,8 +231,13 @@ class Visitor:
                 f"в окне сбора выбран город «{city}», а в настройках — «{expect_city}». "
                 f"Ничего не записано, чтобы не смешать цены двух городов"
             )
-        network = self.tab.json_responses(sites.SITES[site]["data_hosts"])
-        items, via = extract.products_from_page(page, network, site)
+        items, via = self._parse(page, site)
+        # Товары дорисовываются скриптами позже загрузки: ждём их до wait_items_s, а не читаем пустую страницу
+        deadline = time.time() + float(self.s.get("wait_items_s") or 10)
+        while not items and time.time() < deadline and not self.status.cancelled():
+            self.tab.pump(1.5)
+            page = self.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or page
+            items, via = self._parse(page, site)
         log.debug("page.parsed", f"Товаров на странице: {len(items)}", url=url, items=len(items), via=via)
         if items and via == "вёрстка":
             self._sample(site, page, via)
@@ -358,31 +378,7 @@ class Visitor:
                         f"Раздел «{sec_title}» — адрес другого города ({sites.city_from_url(url)}), пропущен"
                     )
                     continue
-                visited = set()
-                for n in range(int(self.s.get("max_section_pages") or 5)):
-                    if not self.allowed(url):
-                        res["notes"].append(f"robots.txt запрещает {url} — не открываем")
-                        res["skipped"] += 1
-                        break
-                    self.status.set(f"{title}: раздел «{sec_title}», страница {n + 1}")
-                    try:
-                        page, items, via, city = self._read(url, site, expect_city)
-                    except cdp.BrowserError as e:
-                        self._refused(res, url, e)
-                        break
-                    res["city"] = res["city"] or city
-                    res["via"].add(via)
-                    if not items:
-                        self.meter.empty += 1
-                        self._dump("empty", url, None, page)
-                    for it in items:
-                        it["group_id"] = gid
-                    res["items"] += items
-                    visited.add(url)
-                    nxt = (page.get("next") or "").split("#")[0]
-                    if not items or not nxt or nxt in visited or sites.site_of(nxt) != site:
-                        break
-                    url = nxt  # без normalize: номер страницы — в параметрах адреса
+                self._section(site, gid, url, sec_title, expect_city, res, title)
             res["shallow"] = len(res["items"])
             # пустой артикул или адрес не считается «уже найден» — иначе пропускались бы все карточки без артикула
             got = {v for it in res["items"] for v in (it.get("code"), it.get("url")) if v}
@@ -430,6 +426,87 @@ class Visitor:
         res["pages"] = self.pages - start_pages
         self.meter.prices = len(res["items"]) + len(res["checks"])
         return res
+
+    def _section(self, site, gid, url, sec_title, expect_city, res, title):
+        """Раздел целиком: страница за страницей до конца выдачи (лимит страниц на раздел и на сбор — общие).
+
+        Следующая страница: ссылка (rel="next", «Дальше», номер текущей + 1) — переходим по ней;
+        нет ссылки, но есть «Показать ещё» — нажимаем на той же странице. Конец раздела — когда новых товаров нет.
+        """
+        visited: set[str] = set()
+        seen: set[str] = set()
+        max_pages = int(self.s.get("max_section_pages") or 30)
+        n = 0
+
+        def take(items):
+            new = [it for it in items if (it.get("code") or it.get("url")) not in seen]
+            for it in new:
+                seen.add(it.get("code") or it.get("url"))
+                it["group_id"] = gid
+            res["items"].extend(new)
+            return new
+
+        while n < max_pages:
+            if not self.allowed(url):
+                res["notes"].append(f"robots.txt запрещает {url} — не открываем")
+                res["skipped"] += 1
+                return
+            self.status.set(f"{title}: раздел «{sec_title}», страница {n + 1}")
+            try:
+                page, items, via, city = self._read(url, site, expect_city, listing=True)
+            except cdp.BrowserError as e:
+                self._refused(res, url, e)
+                return
+            n += 1
+            res["city"] = res["city"] or city
+            res["via"].add(via)
+            visited.add(url)
+            if not items:
+                self.meter.empty += 1
+                self._dump("empty", url, None, page)
+                return
+            if not take(items):
+                return  # страница повторяет прошлую — конец выдачи
+            # «Показать ещё» на той же странице, пока нет ссылки на следующую
+            nxt = (page.get("next") or "").split("#")[0]
+            while (
+                not (nxt and nxt not in visited and sites.site_of(nxt) == site) and page.get("more") and n < max_pages
+            ):
+                total = f" из {page.get('pages_total')}" if (page.get("pages_total") or 0) > 1 else ""
+                self.status.set(f"{title}: раздел «{sec_title}», «Показать ещё» ({n + 1}{total})")
+                if not self._show_more():
+                    break
+                n += 1
+                page = self.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or {}
+                items, via = self._parse(page, site)
+                if not take(items):
+                    return
+                nxt = (page.get("next") or "").split("#")[0]
+            if not nxt or nxt in visited or sites.site_of(nxt) != site:
+                return
+            url = nxt  # без normalize: номер страницы — в параметрах адреса
+        res["notes"].append(f"Раздел «{sec_title}»: достигнут лимит {max_pages} страниц на раздел")
+
+    def _show_more(self):
+        """Нажать «Показать ещё» и дождаться новых карточек. Считается как страница: тот же лимит и пауза."""
+        if self.pages >= int(self.s.get("max_pages") or 40):
+            raise Stop(f"достигнут лимит {self.pages} страниц за сбор — остальное в следующий раз")
+        self._pause()
+        before = self.tab.evaluate(extract.COUNT_SCRIPT, timeout=10) or 0
+        if not self.tab.evaluate(extract.MORE_SCRIPT, timeout=10):
+            return False
+        self.pages += 1
+        self.meter.pages += 1
+        self.meter.requests += 1
+        self._last_open = time.time()
+        deadline = time.time() + float(self.s.get("wait_items_s") or 10) + 5
+        while time.time() < deadline and not self.status.cancelled():
+            self.tab.pump(1)
+            if (self.tab.evaluate(extract.COUNT_SCRIPT, timeout=10) or 0) > before:
+                self.tab.pump(1.5)  # догрузка картинок и цен
+                return True
+        log.info("page.more_empty", "«Показать ещё» нажата, но новых товаров нет")
+        return False
 
     def _refused(self, res, url, e):
         self.meter.errors += 1

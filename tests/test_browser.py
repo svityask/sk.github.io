@@ -180,6 +180,36 @@ class BrowserWindow(unittest.TestCase):
         self.assertGreaterEqual(b["until"] - time.time(), 3500)
         con.close()
 
+    # ---------------------------------------------------------------- листание выдачи
+
+    def test_pages_by_numbers_and_dalshe(self):
+        """Петрович: «1 2 3 … Дальше» без rel="next" — листаем до конца раздела, характеристики берём из списка."""
+        v = self.visitor()
+        res = v.run_site("petrovich", [(1, "https://petrovich.ru/catalog/shtukaturki/", "Штукатурки")], [])
+        self.assertIsNone(res["stopped"])
+        self.assertEqual(len(res["items"]), 6)  # 3 страницы × 2 товара
+        self.assertIn("/catalog/shtukaturki/?p=3", self.site.log)
+        self.assertNotIn("/catalog/shtukaturki/?tags=1", self.site.log)  # «Показать все…» — не следующая страница
+        it = res["items"][0]
+        self.assertEqual(it["params"].get("Вес, кг"), ("30", ""))  # из списка, без захода в карточку
+        self.assertEqual(it["params"].get("Основа"), ("Гипсовая", ""))
+
+    def test_show_more_button(self):
+        """Лемана: кнопка «Показать ещё» без ссылки — нажимаем, пока товары прибавляются."""
+        v = self.visitor()
+        res = v.run_site("lemanapro", [(1, "https://lemanapro.ru/catalogue/pokazat/", "Затирки")], [])
+        self.assertIsNone(res["stopped"])
+        self.assertEqual(len(res["items"]), 6)  # 2 + 2 нажатия по 2
+        self.assertEqual(res["pages"], 4)  # robots.txt + страница + 2 нажатия: нажатие считается как страница
+
+    def test_late_and_lazy_items(self):
+        """Товары дорисовываются через 3 с и догружаются прокруткой — не считаем страницу пустой."""
+        v = self.visitor()
+        res = v.run_site("lemanapro", [(1, "https://lemanapro.ru/catalogue/lenivo/", "Клеи")], [])
+        codes = {i["code"] for i in res["items"]}
+        self.assertTrue({"66600001", "66600002"} <= codes)
+        self.assertEqual(v.meter.empty, 0)
+
     # ---------------------------------------------------------------- стратегия «полка → карточки»
 
     FEED = """<?xml version="1.0" encoding="UTF-8"?>

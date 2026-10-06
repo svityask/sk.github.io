@@ -37,8 +37,9 @@ DEFAULTS = {
     },
     "edge": {
         "pause_s": 12,  # пауза между страницами, как у человека (±30 %)
-        "max_pages": 40,  # не больше страниц за один сбор на сеть
-        "max_section_pages": 5,  # страниц выдачи на один раздел
+        "max_pages": 80,  # не больше страниц за один сбор на сеть (каждая — с паузой как у человека)
+        "max_section_pages": 30,  # страниц выдачи на один раздел: листаем до конца, но не бесконечно
+        "wait_items_s": 10,  # сколько ждать, пока товары дорисуются на странице
         "path": "",  # путь к msedge.exe; пусто — найти самому
         "port": 9224,
         "wait_check_s": 25,  # сколько ждать, пока проверка браузера уйдёт сама
@@ -134,7 +135,7 @@ def save(settings):
     e = clean["edge"]
     e["pause_s"] = max(5, float(e.get("pause_s") or 12))  # быстрее человека не ходим
     e["max_pages"] = max(1, min(200, int(e.get("max_pages") or 40)))
-    e["max_section_pages"] = max(1, min(20, int(e.get("max_section_pages") or 5)))
+    e["max_section_pages"] = max(1, min(100, int(e.get("max_section_pages") or 30)))
     clean["feed_interval_h"] = max(1, float(clean.get("feed_interval_h") or 6))
     cc = clean["crosscheck"]
     cc["n"] = max(0, min(30, int(cc.get("n") or 0)))

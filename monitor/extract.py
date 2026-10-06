@@ -50,7 +50,8 @@ PAGE_SCRIPT = r"""
       const deco = getComputedStyle(el).textDecorationLine + ' ' + getComputedStyle(el.parentElement || el).textDecorationLine;
       const cls = ((el.className || '') + ' ' + ((el.parentElement || {}).className || '')).toString().toLowerCase();
       if (/line-through/.test(deco) || /old|cross|strike|prev/.test(cls)) { old = old || pm[1]; continue; }
-      if (/card|club|gold|loyal|bonus|pro/.test(cls)) continue;  // цена по карте — не цена на полке
+      // цена по карте лояльности — не цена на полке. Только явные признаки: «product-card__price» — это обычная цена
+      if (/card[-_]?price|price[-_]?card|club|gold|loyal|bonus|pro[-_]?price|price[-_]?pro\b/.test(cls) || /по карте|с картой|для pro/i.test(tx)) continue;
       prices.push(pm[1]);
     }
     let name = (a.getAttribute('title') || '').trim();
@@ -61,8 +62,14 @@ PAGE_SCRIPT = r"""
       }
     }
     const avail = /нет в наличии|под заказ|закончил/i.test(found.innerText) ? false : null;
+    // характеристики прямо в списке («Основа: Цементная», «Вес, кг: 30») — фасовка без захода в карточку
+    const specs = {};
+    for (const line of (found.innerText || '').split('\n')) {
+      const m = line.trim().match(/^([А-ЯЁA-Z][^:]{1,40}):\s*(.{1,80})$/);
+      if (m && Object.keys(specs).length < 20) specs[m[1].trim()] = m[2].trim();
+    }
     const from = /(^|[\s(])от\s*\d/i.test(found.innerText);  // «от 450 ₽» — цена за самую дешёвую фасовку
-    out.cards.push({url: href, name, price: prices[0] || null, old_price: old, available: avail, from});
+    out.cards.push({url: href, name, price: prices[0] || null, old_price: old, available: avail, from, specs});
   }
   // характеристики на карточке товара: «Вес, кг — 30», «Фасовка — 25 кг» (для фасовки и вида товара)
   out.specs = {};
@@ -90,18 +97,68 @@ PAGE_SCRIPT = r"""
     const tx = el && (el.innerText || '').trim();
     if (tx) { out.city = tx.slice(0, 200); break; }
   }
-  // следующая страница выдачи
+  // следующая страница выдачи: rel="next" → ссылка «Дальше / Следующая / ›» → номер текущей страницы + 1
+  const nextText = /^(следующая|далее|дальше|вперед|вперёд|ещё страница|›|»|→|>)(\s*(страница|›|»|→|>|—|–|-))*$/i;
   const rel = document.querySelector('a[rel="next"], link[rel="next"]');
   if (rel && rel.href) out.next = rel.href;
   if (!out.next) {
     for (const a of document.querySelectorAll('a[href]')) {
-      const tx = (a.innerText || a.getAttribute('aria-label') || '').trim().toLowerCase();
-      if (/^(следующая|далее|вперед|вперёд|›|»|→)$/.test(tx) || /следующая страница/.test(tx)) { out.next = a.href; break; }
+      const tx = (a.innerText || '').trim();
+      const label = (a.getAttribute('aria-label') || a.getAttribute('title') || '').trim();
+      if (nextText.test(tx) || /следующ|next page/i.test(label) || (!tx && /^(далее|дальше|вперед|вперёд|next)$/i.test(label))) {
+        out.next = a.href; break;
+      }
     }
+  }
+  const base = location.pathname.replace(/\/(page-?\d+|p\d+)\/?$/i, '/');
+  const sameSection = (href) => { try { return new URL(href).pathname.startsWith(base.replace(/\/$/, '')); } catch (e) { return false; } };
+  let cur = null;
+  for (const el of document.querySelectorAll('[aria-current="page"], [class*="active"], [class*="current"], [class*="selected"]')) {
+    const t = (el.innerText || '').trim();
+    if (/^\d{1,3}$/.test(t)) { cur = +t; break; }
+  }
+  if (cur === null) {
+    const q = new URLSearchParams(location.search);
+    const m = location.pathname.match(/\/page-?(\d+)\/?$/i);
+    cur = +(q.get('page') || q.get('p') || q.get('PAGEN_1') || (m && m[1]) || 1);
+  }
+  out.page_no = cur;
+  let maxNo = cur;
+  for (const a of document.querySelectorAll('a[href]')) {
+    const t = (a.innerText || '').trim();
+    if (!/^\d{1,3}$/.test(t) || !sameSection(a.href)) continue;
+    maxNo = Math.max(maxNo, +t);
+    if (!out.next && +t === cur + 1) out.next = a.href;
+  }
+  out.pages_total = maxNo;
+  // «Показать ещё» — догрузка на той же странице (если перейти по ссылке нельзя)
+  out.more = false;
+  for (const el of document.querySelectorAll('button, a, [role="button"]')) {
+    const t = (el.innerText || el.getAttribute('aria-label') || '').trim();
+    if (/^(показать|загрузить)\s+(ещё|еще|больше)/i.test(t) && el.offsetParent !== null && !el.disabled) { out.more = true; break; }
   }
   return out;
 })()
 """
+
+# «Показать ещё»: нажать видимую кнопку догрузки. True — нажали.
+MORE_SCRIPT = r"""
+(() => {
+  for (const el of document.querySelectorAll('button, a, [role="button"]')) {
+    const t = (el.innerText || el.getAttribute('aria-label') || '').trim();
+    if (/^(показать|загрузить)\s+(ещё|еще|больше)/i.test(t) && el.offsetParent !== null && !el.disabled) {
+      el.scrollIntoView({block: 'center'}); el.click(); return true;
+    }
+  }
+  return false;
+})()
+"""
+
+# Сколько на странице ссылок на карточки — чтобы понять, что догрузка пришла.
+COUNT_SCRIPT = r"""new Set([...document.querySelectorAll('a[href*="/product/"]')].map(a => a.href.split('#')[0].split('?')[0])).size"""
+
+# Прокрутка на экран вниз: выдача догружает товары по мере прокрутки, как у человека.
+SCROLL_SCRIPT = "window.scrollBy(0, document.documentElement.clientHeight * 0.9); window.scrollY"
 
 CHECK_WORDS = (
     "проверка браузера",
@@ -191,7 +248,26 @@ _SHELF_KEYS = (
     "sale",
 )
 _OLD_KEYS = ("displayOld", "old", "oldPrice", "old_price", "previous", "crossed", "priceOld", "strikethrough", "before")
-_CARD_HINT = ("gold", "club", "card", "loyal", "bonus", "pro", "partner", "member")
+# Цена по карте лояльности / для профи — не цена на полке. Признаки — части имени поля, но без «pro» и «card» самих
+# по себе: «productPrice», «productCard» — это обычная цена товара.
+_CARD_HINT = (
+    "gold",
+    "club",
+    "cardprice",
+    "card_price",
+    "pricecard",
+    "loyal",
+    "bonus",
+    "proprice",
+    "pro_price",
+    "partner",
+    "member",
+)
+
+
+def _is_card_key(key):
+    kl = key.lower()
+    return any(h in kl for h in _CARD_HINT) or kl in ("card", "pro", "cardvalue")
 
 
 def _price_from(value):
@@ -203,7 +279,7 @@ def _price_from(value):
     if isinstance(value, dict):
         shelf = old = None
         for k in _SHELF_KEYS:
-            if k in value and not any(h in k.lower() for h in _CARD_HINT):
+            if k in value and not _is_card_key(k):
                 shelf, _ = _price_from(value[k])
                 if shelf:
                     break
@@ -235,7 +311,7 @@ def _find_price(obj):
         kl = k.lower()
         if "price" not in kl and kl not in ("prices", "cost"):
             continue
-        if any(h in kl for h in _CARD_HINT):
+        if _is_card_key(kl):
             continue
         if any(o.lower() == kl for o in _OLD_KEYS) or "old" in kl:
             if old is None:
@@ -443,6 +519,7 @@ def products_from_page(page, network_json, site):
                 "via": "вёрстка",
                 "vendor": "",
                 "price_from": bool(c.get("from")),
+                "params": {k: (v, "") for k, v in (c.get("specs") or {}).items() if isinstance(v, str)},
             }
         )
     layers.append(cards)
