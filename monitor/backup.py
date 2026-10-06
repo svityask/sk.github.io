@@ -79,15 +79,20 @@ def make(con: sqlite3.Connection, reason: str = "после сбора", setting
             con.backup(dst)
         finally:
             dst.close()
-        with zipfile.ZipFile(target + ".part", "w", zipfile.ZIP_DEFLATED) as z:
-            z.write(snap, "monitor.sqlite")
-            if os.path.exists(config.SETTINGS_PATH):
-                z.write(config.SETTINGS_PATH, os.path.basename(config.SETTINGS_PATH))
-            z.writestr(
-                "README.txt",
-                f"Резервная копия Монитора Основит DIY {config.VERSION}, {stamp} ({reason}).\n"
-                'Восстановить: Запустить.cmd --restore "путь к этому файлу" (приложение закрыто).\n',
-            )
+        try:
+            with zipfile.ZipFile(target + ".part", "w", zipfile.ZIP_DEFLATED) as z:
+                z.write(snap, "monitor.sqlite")
+                if os.path.exists(config.SETTINGS_PATH):
+                    z.write(config.SETTINGS_PATH, os.path.basename(config.SETTINGS_PATH))
+                z.writestr(
+                    "README.txt",
+                    f"Резервная копия Монитора Основит DIY {config.VERSION}, {stamp} ({reason}).\n"
+                    'Восстановить: Запустить.cmd --restore "путь к этому файлу" (приложение закрыто).\n',
+                )
+        except BaseException:
+            if os.path.exists(target + ".part"):  # кончилось место и т. п. — недописанную копию не оставляем
+                os.remove(target + ".part")
+            raise
     os.replace(target + ".part", target)
     removed = prune()
     mirror(target, settings)

@@ -13,13 +13,15 @@ import time
 import unittest
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
+import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 if "OSNOVIT_DIY_DATA" not in os.environ:
     os.environ["OSNOVIT_DIY_DATA"] = tempfile.mkdtemp(prefix="osnovit-rob-")
 
-from monitor import cdp, collect, config, feeds, schedule, server  # noqa: E402
+from monitor import cdp, collect, config, db, feeds, kinds, schedule, server, xlsx  # noqa: E402
 from monitor.feeds import MSK  # noqa: E402
 
 
@@ -254,6 +256,103 @@ class ScheduleTime(unittest.TestCase):
     def test_decode_schtasks_output(self):
         self.assertEqual(schedule._decode("Ошибка".encode()), "Ошибка")
         self.assertEqual(schedule._decode("Ошибка".encode("cp866")), "Ошибка")
+
+
+class KindCache(unittest.TestCase):
+    def test_result_is_a_copy(self):
+        a = kinds.attrs("Клей плиточный Основит Плитэкс C1 25 кг")
+        self.assertEqual(a, {"type": "Клей плиточный", "grade": "C1"})
+        a["type"] = "испорчено"
+        self.assertEqual(kinds.attrs("Клей плиточный Основит Плитэкс C1 25 кг")["type"], "Клей плиточный")
+        self.assertEqual(kinds.attrs(None), {})
+
+
+class ProductsCatalog(unittest.TestCase):
+    """Вкладка «Товары» хранит разобранный каталог — но любая правка и новый сбор видны сразу."""
+
+    def setUp(self):
+        self.app = server.App()
+        con = self.app.con
+        con.execute("DELETE FROM products")
+        run = db.start_run(con)
+        for i, name in enumerate(["Штукатурка гипсовая Основит 30 кг", "Клей для плитки Церезит 25 кг"]):
+            db.record(
+                con,
+                run,
+                {
+                    "key": f"petrovich:{90000 + i}",
+                    "site": "petrovich",
+                    "name": name,
+                    "price": 500.0 + i,
+                    "pack_qty": 30.0,
+                    "pack_unit": "кг",
+                    "source": "feed",
+                },
+            )
+        db.finish_run(con, run, "готово", {})
+
+    def item(self, q="", key="petrovich:90000"):
+        return next(p for p in self.app.products(q)["items"] if p["key"] == key)
+
+    def test_search_and_edits_are_visible(self):
+        app, con = self.app, self.app.con
+        self.assertEqual(app.products("штукатурка гипсовая")["total"], 1)
+        self.assertEqual(app.products("ГИПСОВАЯ основит")["total"], 1)  # регистр и порядок слов не важны
+        self.assertEqual(app.products("нет такого")["total"], 0)
+        self.assertIs(app.products()["items"][0]["is_ours"], True)  # Основит — первым
+
+        db.set_kind(con, "petrovich:90001", "Клей плиточный C2")
+        self.assertEqual(self.item(key="petrovich:90001")["kind"], "Клей плиточный C2")
+        self.assertEqual(app.products("плиточный c2")["total"], 1)  # и поиск по новому виду
+
+        db.set_pack(con, "petrovich:90000", "25 кг")
+        self.assertEqual(self.item()["pack"], "25 кг")
+        self.assertEqual(self.item()["per_unit"], 20.0)
+
+        db.decide(con, "petrovich:90000", "exclude")
+        self.assertTrue(self.item()["excluded"])
+        db.decide(con, "petrovich:90000", "undo")
+        self.assertFalse(self.item()["excluded"])
+
+    def test_new_run_is_visible(self):
+        con = self.app.con
+        self.assertEqual(self.item()["price"], 500.0)
+        run = db.start_run(con)
+        db.record(
+            con,
+            run,
+            {
+                "key": "petrovich:90000",
+                "site": "petrovich",
+                "name": "Штукатурка гипсовая Основит 30 кг",
+                "price": 550.0,
+                "pack_qty": 30.0,
+                "pack_unit": "кг",
+                "source": "feed",
+            },
+        )
+        db.finish_run(con, run, "готово", {})
+        self.assertEqual(self.item()["price"], 550.0)
+        self.assertTrue(self.item()["in_last_run"])
+        self.assertFalse(self.item(key="petrovich:90001")["in_last_run"])
+
+
+class ExcelLinks(unittest.TestCase):
+    def test_long_label_with_quotes_stays_valid(self):
+        """Подпись ссылки с кавычками длиннее 255 знаков: Excel не должен «восстанавливать» файл."""
+        sh = xlsx.Sheet("Тест", [("Товар", 60, xlsx.LINK)])
+        label = 'Штукатурка "Основит" ' * 30 + "\x0b"
+        sh.add(xlsx.Link("https://petrovich.ru/product/123456/", label))
+        path = os.path.join(tempfile.mkdtemp(prefix="osnovit-xlsx-"), "t.xlsx")
+        xlsx.write(path, [sh])
+        with zipfile.ZipFile(path) as z:
+            name = next(n for n in z.namelist() if n.startswith("xl/worksheets/sheet"))
+            root = ET.fromstring(z.read(name))  # XML цел
+        ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+        formula = next(root.iter(ns + "f")).text
+        inner = formula[len("HYPERLINK(") : -1].split('","', 1)[1][:-1]
+        self.assertLessEqual(len(inner), 255)
+        self.assertEqual(inner.replace('""', "").count('"'), 0)  # кавычки не разрезаны пополам
 
 
 if __name__ == "__main__":

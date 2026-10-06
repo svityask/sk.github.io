@@ -45,6 +45,7 @@ class App:
         self.status = collect.Status()
         self.last_ping = time.time()
         self._health: tuple[float, dict[str, Any] | None] = (0.0, None)
+        self._catalog_cache: tuple[tuple, list[tuple[str, dict[str, Any]]]] | None = None
         if not db.lock_info(self.con, collect.LOCK):
             db.recover_interrupted(self.con)
         log.info("app.start", f"Окно приложения открыто, версия {config.VERSION}")
@@ -235,37 +236,62 @@ class App:
         p["site_title"] = sites.SITES.get(p["site"], {}).get("title", p["site"])
         return p
 
-    def products(self, q="", site="", ours=False, limit=300):
-        last = self._last_run_id()
-        rows = [
-            dict(r)
-            for r in self.con.execute(
-                "SELECT * FROM products WHERE last_seen>=? ORDER BY name", (time.time() - 60 * 86400,)
-            )
-        ]
-        overrides, decisions = db.kind_overrides(self.con), db.decisions(self.con)
+    CATALOG_DAYS = 60  # вкладка «Товары» показывает товары, которые видели за последние 60 дней
+
+    def _catalog_signature(self, brand):
+        """Отпечаток данных вкладки «Товары»: меняется после сбора и после любой ручной правки."""
+        row = self.con.execute(
+            "SELECT (SELECT COUNT(*) || ':' || IFNULL(MAX(last_seen), 0) || ':' || IFNULL(TOTAL(price), 0) "
+            "        || ':' || IFNULL(TOTAL(pack_qty), 0) FROM products),"
+            " (SELECT COUNT(*) || ':' || IFNULL(MAX(ts), 0) FROM kind_overrides),"
+            " (SELECT COUNT(*) || ':' || IFNULL(MAX(ts), 0) FROM pack_overrides),"
+            " (SELECT COUNT(*) || ':' || IFNULL(MAX(ts), 0) FROM decisions),"
+            " (SELECT IFNULL(MAX(id), 0) FROM runs WHERE status!='идёт')"
+        ).fetchone()
+        return (*tuple(row), tuple(brand), int(time.time() // 3600))  # и раз в час — граница «60 дней» сдвигается
+
+    def _catalog(self):
+        """Все товары вкладки «Товары», уже разобранные (вид, фасовка, «наш»), со строкой для поиска.
+
+        Разбор нескольких десятков тысяч названий занимает сотни миллисекунд, а поиск идёт на каждое нажатие
+        клавиши. Поэтому разобранный каталог хранится, пока не изменились данные (см. _catalog_signature).
+        Словари в кэше общие для всех запросов — после сборки их не меняем.
+        """
         brand = config.load().get("brand_words") or []
-        words = [w for w in (q or "").lower().replace("ё", "е").split() if w]
-        out = []
-        for p in rows:
-            if site and p["site"] != site:
-                continue
-            self._enrich(p, overrides, decisions, brand)
-            if ours and not p["is_ours"]:
-                continue
-            hay = (
-                " ".join([p.get("name") or "", p["kind"], p.get("vendor") or "", p.get("code") or ""])
-                .lower()
-                .replace("ё", "е")
-            )
-            if words and not all(w in hay for w in words):
-                continue
+        sig = self._catalog_signature(brand)
+        cached = self._catalog_cache
+        if cached and cached[0] == sig:
+            return cached[1]
+        last = self._last_run_id()
+        overrides, decisions = db.kind_overrides(self.con), db.decisions(self.con)
+        items = []
+        for r in self.con.execute(
+            "SELECT * FROM products WHERE last_seen>=? ORDER BY name", (time.time() - self.CATALOG_DAYS * 86400,)
+        ):
+            p = self._enrich(dict(r), overrides, decisions, brand)
             p["in_last_run"] = p.get("last_run") == last
             p.pop("attrs", None)
-            out.append(p)
-        out.sort(
-            key=lambda p: (not p["is_ours"], not p["in_last_run"], p["site"], p["kind"] or "я", p.get("per_unit") or 0)
+            hay = " ".join([p.get("name") or "", p["kind"], p.get("vendor") or "", p.get("code") or ""])
+            items.append((hay.lower().replace("ё", "е"), p))
+        items.sort(
+            key=lambda x: (
+                not x[1]["is_ours"],
+                not x[1]["in_last_run"],
+                x[1]["site"],
+                x[1]["kind"] or "я",
+                x[1].get("per_unit") or 0,
+            )
         )
+        self._catalog_cache = (sig, items)
+        return items
+
+    def products(self, q="", site="", ours=False, limit=300):
+        words = [w for w in (q or "").lower().replace("ё", "е").split() if w]
+        out = [
+            p
+            for hay, p in self._catalog()
+            if (not site or p["site"] == site) and (not ours or p["is_ours"]) and all(w in hay for w in words)
+        ]
         return {"items": out[:limit], "total": len(out)}
 
     def product(self, key):

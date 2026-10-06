@@ -158,8 +158,14 @@ def _load_state() -> dict[str, Any]:
 
 
 def _save_state(state: dict[str, Any]) -> None:
-    with open(_state_path(), "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False)
+    """Через временный файл: выключение посреди записи не должно стереть, о чём уже предупреждали."""
+    tmp = _state_path() + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False)
+        os.replace(tmp, _state_path())
+    except OSError as e:
+        log.warning("watchdog.state_failed", f"Не записалось состояние тревог: {e}")
 
 
 def notify_windows(title: str, text: str) -> bool:
