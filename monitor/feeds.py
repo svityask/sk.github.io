@@ -4,11 +4,13 @@
 каталог DIY-сети — сотни тысяч позиций, в память целиком он не грузится.
 """
 
+import codecs
 import csv
 import email.utils
 import gzip
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -18,7 +20,8 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from . import guard, log, sites
 
@@ -449,23 +452,39 @@ _CSV_COLUMNS = {
 }
 
 
-def _read_csv(path, feed, want):
+CSV_PROBE_BYTES = 1 << 20  # по первому мегабайту решаем, UTF-8 это или cp1251
+
+
+def _csv_encoding(path):
+    """utf-8-sig или cp1251 — по началу файла (обрезанный на границе последний символ не считается ошибкой)."""
     with _open(path) as raw:
-        data = raw.read()
-    for enc in ("utf-8-sig", "cp1251"):
-        try:
-            text = data.decode(enc)
-            break
-        except UnicodeDecodeError:
-            continue
-    else:
-        text = data.decode("utf-8", "replace")
-    del data
-    sample = text[:20000]
+        head = raw.read(CSV_PROBE_BYTES)
     try:
-        rows = csv.reader(io.StringIO(text), csv.Sniffer().sniff(sample, delimiters=";,\t|"))
+        codecs.getincrementaldecoder("utf-8-sig")().decode(head, final=False)
+        return "utf-8-sig"
+    except UnicodeDecodeError:
+        return "cp1251"
+
+
+def _read_csv(path, feed, want):
+    """CSV читается потоком, как и XML: каталог сети в сотни мегабайт целиком в память не грузится."""
+    enc = _csv_encoding(path)
+    with _open(path) as raw, io.TextIOWrapper(raw, encoding=enc, errors="replace", newline="") as text:
+        _read_csv_rows(text, feed, want)
+
+
+def _read_csv_rows(text, feed, want):
+    sample = text.read(20000)
+    sample += text.readline()  # до конца строки: Sniffer не должен видеть обрезанную запись
+    try:
+        dialect: Any = csv.Sniffer().sniff(sample, delimiters=";,\t|")
     except csv.Error:
-        rows = csv.reader(io.StringIO(text), delimiter=";" if sample.count(";") > sample.count(",") else ",")
+        dialect = None
+    lines = itertools.chain(io.StringIO(sample), text)
+    if dialect is not None:
+        rows = csv.reader(lines, dialect)
+    else:
+        rows = csv.reader(lines, delimiter=";" if sample.count(";") > sample.count(",") else ",")
     header = next(rows, None)
     if not header:
         raise FeedError("CSV-файл фида пустой.")
@@ -527,16 +546,23 @@ def _read_csv(path, feed, want):
 
 
 def parse_number(s):
+    """Цена из текста: «1 234,50», «1,234.50», «1.234,50», «690.00 RUB» → float; ноль и мусор → None."""
     if s is None:
         return None
-    s = str(s).strip().replace(" ", "").replace(" ", "").replace(" ", "")
-    m = re.search(
-        r"-?\d+(?:[.,]\d+)?", s.replace(",", ".") if s.count(",") == 1 and "." not in s else s.replace(",", "")
-    )
+    s = re.sub(r"[\s\u00a0\u202f']", "", str(s))  # пробелы, неразрывные пробелы и апостроф — разделители тысяч
+    m = re.search(r"-?\d[\d.,]*", s)
     if not m:
         return None
+    num = m.group(0).rstrip(".,")
+    dot, comma = num.rfind("."), num.rfind(",")
+    if dot >= 0 and comma >= 0:  # оба разделителя: десятичный — тот, что правее
+        num = num.replace(",", "") if dot > comma else num.replace(".", "").replace(",", ".")
+    elif comma >= 0:  # «1234,50» — запятая десятичная; «1,234,567» — тысячи
+        num = num.replace(",", ".") if num.count(",") == 1 else num.replace(",", "")
+    elif num.count(".") > 1:  # «1.234.567» — точки разделяют тысячи
+        num = num.replace(".", "")
     try:
-        v = float(m.group(0).replace(",", "."))
+        v = float(num)
     except ValueError:
         return None
     return v if v > 0 else None
@@ -565,6 +591,9 @@ def parse_bool(s):
     return None
 
 
+MSK = timezone(timedelta(hours=3))
+
+
 def parse_date(s):
     """Дата выгрузки из файла → секунды UTC. Московское время, если пояс не указан."""
     if not s:
@@ -572,12 +601,13 @@ def parse_date(s):
     s = s.strip()
     for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S", "%d.%m.%Y %H:%M"):
         try:
-            dt = datetime.strptime(s, fmt)
-            return dt.replace(tzinfo=timezone.utc).timestamp() - 3 * 3600
+            return datetime.strptime(s, fmt).replace(tzinfo=MSK).timestamp()
         except ValueError:
             continue
     try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        # без пояса — московское время, а не пояс компьютера («2026-10-06», «2026-10-06T08:00:00.123»)
+        return (dt if dt.tzinfo else dt.replace(tzinfo=MSK)).timestamp()
     except ValueError:
         pass
     try:

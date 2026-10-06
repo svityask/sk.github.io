@@ -449,8 +449,12 @@ const when = (ts) => ts ? new Date(ts * 1000).toLocaleString("ru-RU", {day: "2-d
 async function api(path, body) {
   const opt = {headers: {"X-Token": TOKEN}};
   if (body !== undefined) { opt.method = "POST"; opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
-  const r = await fetch(path, opt);
-  return r.json();
+  let r;
+  try { r = await fetch(path, opt); }
+  catch (e) { toast("Нет связи с приложением — окно «Запустить.cmd» закрыто?"); throw e; }
+  const data = await r.json().catch(() => ({error: `ответ ${r.status} не прочитан`}));
+  if (r.status >= 500) { toast("Ошибка: " + (data.error || r.status)); throw new Error(data.error || String(r.status)); }
+  return data;
 }
 function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 2200); }
 
@@ -675,8 +679,11 @@ function renderProducts() {
   $("p-site").querySelectorAll("button").forEach(b => b.onclick = () => { pSite = b.dataset.s; renderProducts(); });
   loadProducts();
 }
+let pSeq = 0;
 async function loadProducts() {
+  const seq = ++pSeq;  // ответы на быстрый ввод могут прийти не по порядку — показываем только последний
   const r = await api(`/api/products?q=${encodeURIComponent($("p-q").value)}&site=${pSite}&ours=${$("p-ours").checked ? 1 : 0}`);
+  if (seq !== pSeq) return;
   if (!r.items.length) { $("p-list").innerHTML = `<div class="empty">${r.total === 0 && !$("p-q").value ? "Товары появятся после первого сбора." : "Ничего не нашлось."}</div>`; return; }
   $("p-list").innerHTML = `<table><tr><th>Товар</th><th>Вид</th><th class="num">Цена</th><th class="num">За ед.</th><th class="num">Посл. изменение</th><th>Наличие</th></tr>` +
     r.items.map(p => {

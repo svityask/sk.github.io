@@ -28,9 +28,27 @@ def launcher() -> str:
     return os.path.join(config.ROOT, "Запустить.cmd")
 
 
+def parse_at(at: str | None) -> tuple[int, int]:
+    """«8:30», «08.30», «0830» → (8, 30). ValueError с понятным текстом, если это не время суток."""
+    m = re.fullmatch(r"\s*(\d{1,2})\s*[:.]?\s*(\d{2})\s*", at or "08:30")
+    if not m or int(m.group(1)) > 23 or int(m.group(2)) > 59:
+        raise ValueError(f"не понял время «{at}» — напишите, например, 08:30")
+    return int(m.group(1)), int(m.group(2))
+
+
 def _start_boundary(at: str) -> str:
-    hh, mm = (at or "08:30").split(":")[:2]
-    return time.strftime("%Y-%m-%d") + f"T{int(hh):02d}:{int(mm):02d}:00"
+    hh, mm = parse_at(at)
+    return time.strftime("%Y-%m-%d") + f"T{hh:02d}:{mm:02d}:00"
+
+
+def _decode(raw: bytes) -> str:
+    """Вывод schtasks: UTF-8, если окно переключено chcp 65001 (так делает Запустить.cmd), иначе OEM-кодировка."""
+    for enc in ("utf-8", "cp866"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("cp866", "replace")
 
 
 def build_xml(kind: str, at: str = "08:30", wake: bool = False, command: str | None = None) -> str:
@@ -81,9 +99,8 @@ def build_xml(kind: str, at: str = "08:30", wake: bool = False, command: str | N
 
 
 def _schtasks(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["schtasks", *args], capture_output=True, text=True, encoding="cp866", errors="replace", timeout=30
-    )
+    r = subprocess.run(["schtasks", *args], capture_output=True, timeout=30)
+    return subprocess.CompletedProcess(r.args, r.returncode, _decode(r.stdout or b""), _decode(r.stderr or b""))
 
 
 def _create(name: str, xml: str) -> subprocess.CompletedProcess:
@@ -113,7 +130,13 @@ def state() -> dict:
 def set_schedule(enabled: bool, at: str = "08:30", watchdog: bool = True, wake: bool = False) -> dict:
     if not sys.platform.startswith("win"):
         return {"ok": False, "error": "Расписание доступно только в Windows"}
-    if not enabled:
+    if enabled:
+        try:
+            hh, mm = parse_at(at)
+        except ValueError as e:
+            return {"ok": False, "error": str(e)}
+        at = f"{hh:02d}:{mm:02d}"
+    else:
         _schtasks("/Delete", "/TN", TASK_NAME, "/F")
         _schtasks("/Delete", "/TN", WATCHDOG_NAME, "/F")
         log.info("schedule.off", "Расписание выключено")
