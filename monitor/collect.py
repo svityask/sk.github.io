@@ -18,7 +18,24 @@ import traceback
 import uuid
 from typing import Any
 
-from . import analysis, backup, cdp, config, db, dumps, extract, feeds, guard, kinds, log, match, report, sites, units
+from . import (
+    analogs,
+    analysis,
+    backup,
+    cdp,
+    config,
+    db,
+    dumps,
+    extract,
+    feeds,
+    guard,
+    kinds,
+    log,
+    match,
+    report,
+    sites,
+    units,
+)
 from .metrics import Meter
 from .visitor import Stop, Visitor
 
@@ -314,6 +331,10 @@ class Collector:
                 elif allowed and meta.get("status") in ("скачан", "не изменился", "файл"):
                     guard.success(con, site, "feed")
             cat_entries_local = cat_entries
+            auto = self.settings.get("analogs") or {}
+            auto_on = bool(auto.get("auto", True))
+            auto_types = set(auto.get("types") or []) or None  # пусто — все виды, что есть у Основит
+            candidates: list[dict[str, Any]] = []
 
             def want(offer, feed):
                 gid = None
@@ -323,6 +344,9 @@ class Collector:
                         break
                 pe = prod_by_key.get(offer["key"])
                 if gid is None and pe is None:
+                    # не отслеживается — но может оказаться товаром Основит или его аналогом (автопоиск)
+                    if auto_on and analogs.wanted(offer, auto_types):
+                        candidates.append(offer)
                     return False
                 offer["group_id"] = gid if gid is not None else pe["id"]
                 return True
@@ -337,6 +361,23 @@ class Collector:
                     continue
                 o.update(source="feed", city=conf.get("feed_city") or None, via="фид")
                 found[o["key"]] = o
+            if auto_on:
+                self.status.set(f"{title}: ищу товары Основит и их аналоги по всему фиду")
+                extra, auto_summary = analogs.pick(candidates, found, self.brand, int(auto.get("max_per_kind") or 40))
+                for o in extra:
+                    o.update(
+                        source="feed", city=conf.get("feed_city") or None, via="фид, автопоиск", found_by=analogs.AUTO
+                    )
+                    o.setdefault("group_id", None)
+                    found[o["key"]] = o
+                info["auto"] = auto_summary
+                if extra:
+                    log.info(
+                        "analogs.found",
+                        f"Автопоиск: Основит {auto_summary['ours']}, аналогов {len(extra) - auto_summary['ours']}",
+                        ours=auto_summary["ours"],
+                        analogs=len(extra) - auto_summary["ours"],
+                    )
             age_h = (time.time() - (feed.date or meta.get("fetched_at") or time.time())) / 3600
             info["feed"] = {
                 "status": meta.get("status"),
@@ -617,6 +658,7 @@ class Collector:
                         "available": it.get("available"),
                         "source": it["source"],
                         "city": it.get("city"),
+                        "found_by": it.get("found_by") or "tracked",
                     }
                     ch = db.record(con, self.run_id, item, ts=self.started)
                     if (

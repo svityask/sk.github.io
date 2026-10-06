@@ -6,7 +6,7 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = "2.5.1"
+VERSION = "2.6.0"
 DATA = os.environ.get("OSNOVIT_DIY_DATA") or os.path.join(ROOT, "data")
 FEEDS_DIR = os.path.join(DATA, "feeds")
 SAMPLES_DIR = os.path.join(DATA, "samples")
@@ -54,6 +54,11 @@ DEFAULTS = {
         "jump_pct": 40,  # скачок цены за один сбор
         "unit_ratio": 3.0,  # цена за кг в N раз выше/ниже середины раздела
         "feed_age_h": 36,  # фид старше — предупреждение
+    },
+    "analogs": {
+        "auto": True,  # после сбора искать товары Основит и их аналоги по всему фиду, а не только в отслеживаемом
+        "max_per_kind": 40,  # аналогов на один вид товара (штукатурка гипсовая, затирка…) на сеть
+        "types": [],  # какие виды искать; пусто — все, что есть у Основит
     },
     "report_dir": "",
     "failures": {
@@ -135,6 +140,8 @@ def save(settings):
     cc["n"] = max(0, min(30, int(cc.get("n") or 0)))
     cc["warn_pct"] = max(1, float(cc.get("warn_pct") or 10))
     clean["health"]["max_age_h"] = max(2, float(clean["health"].get("max_age_h") or 26))
+    an = clean["analogs"]
+    an["max_per_kind"] = max(5, min(300, int(an.get("max_per_kind") or 40)))
     tmp = SETTINGS_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(clean, f, ensure_ascii=False, indent=2)

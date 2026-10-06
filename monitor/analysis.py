@@ -156,7 +156,7 @@ def analyse(products, groups, settings, decisions, missing=(), overrides=None):
         row = {
             "key": o["key"],
             "site": o["site"],
-            "group": groups.get(o.get("group_id"), "—"),
+            "group": "автопоиск" if o.get("found_by") == "auto" else groups.get(o.get("group_id"), "—"),
             "kind": o["kind"],
             "kind_manual": o["kind_manual"],
             "name": o.get("name"),

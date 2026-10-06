@@ -240,10 +240,13 @@ class Pipeline(unittest.TestCase):
 
         r1 = collect.run(s, con=con)
         self.assertNotIn("error", r1, r1.get("trace"))
-        self.assertEqual(r1["prices"], 7)
+        self.assertEqual(r1["prices"], 8)  # 7 из «Штукатурок» + шпаклёвка Основит из неотслеживаемой категории
+        auto = con.execute("SELECT key, found_by FROM products WHERE found_by='auto'").fetchall()
+        self.assertEqual([tuple(r) for r in auto], [("lemanapro:66666666", "auto")])  # нашёл автопоиск
+        self.assertEqual(r1["sites"]["lemanapro"]["auto"]["ours"], 1)
         kinds = {i["kind"] for i in r1["review_items"]}
         self.assertEqual(kinds, {"pack", "ratio", "missing"})  # «20 л» — свой вид, не ошибка единицы
-        ours = r1["market"][0]
+        ours = next(m for m in r1["market"] if m["key"] == "lemanapro:82065432")
         self.assertEqual(ours["count"], 3)
         self.assertAlmostEqual(ours["median"], 18.2)
         self.assertTrue(os.path.exists(r1["report"]))
@@ -264,7 +267,7 @@ class Pipeline(unittest.TestCase):
         jumps = [i for i in r2["review_items"] if i["kind"] == "jump"]
         self.assertEqual([j["key"] for j in jumps], ["lemanapro:12345679"])
         hist = con.execute("SELECT COUNT(*) FROM history").fetchone()[0]
-        self.assertEqual(hist, 7 + 2)  # история пишется только при изменении
+        self.assertEqual(hist, 8 + 2)  # история пишется только при изменении (8 товаров, 2 изменения)
 
         # решения: «не конкурент» и «всё верно» убирают из «На проверку»
         db.decide(con, "lemanapro:12345681", "exclude")

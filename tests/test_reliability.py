@@ -213,6 +213,7 @@ def _settings(feed, report_dir):
     s["report_dir"] = report_dir
     s["sites"]["petrovich"]["enabled"] = False
     s["sites"]["lemanapro"].update(feed=feed, edge_enabled=False, feed_city="Москва")
+    s["analogs"]["auto"] = False  # здесь проверяем надёжность сбора, а не автопоиск аналогов
     return s
 
 

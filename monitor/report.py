@@ -17,6 +17,13 @@ def _dt(ts):
     return datetime.fromtimestamp(ts) if ts else None
 
 
+def _group(p, groups):
+    """Раздел товара: запись «Что отслеживаем» или пометка, что товар нашёл автопоиск аналогов."""
+    if p.get("found_by") == "auto":
+        return "Основит и аналоги — автопоиск"
+    return groups.get(p.get("group_id"), "")
+
+
 def _avail(v):
     return {1: "есть", 0: "нет"}.get(v, "") if v is not None else ""
 
@@ -191,13 +198,11 @@ def build(settings, con, run_id, products, market, review, stats, summary, group
             ("Артикул", 12, TEXT),
         ],
     )
-    for p in sorted(
-        products, key=lambda p: (p["site"], groups.get(p["group_id"], ""), not p.get("is_ours"), p["name"] or "")
-    ):
+    for p in sorted(products, key=lambda p: (p["site"], _group(p, groups), not p.get("is_ours"), p["name"] or "")):
         disc = -(p["old_price"] - p["price"]) / p["old_price"] if p.get("old_price") else None
         al.add(
             _site(p["site"]),
-            groups.get(p["group_id"], ""),
+            _group(p, groups),
             Link(p["url"], p["name"]),
             p.get("vendor") or "",
             units.pack_label(p.get("pack_qty"), p.get("pack_unit")),
@@ -242,6 +247,17 @@ def build(settings, con, run_id, products, market, review, stats, summary, group
     sm.add("Сбор", datetime.now().strftime("%d.%m.%Y %H:%M"))
     sm.add("Версия приложения", config.VERSION)
     sm.add("Цен в сборе", (summary.get("prices", len(products)), INT))
+    for site, info in summary.get("sites", {}).items():
+        a = info.get("auto")
+        if a and (a.get("ours") or a.get("kinds")):
+            kinds_text = "; ".join(
+                f"{k} — {v['taken']}" + (f" из {v['found']}" if v["found"] > v["taken"] else "")
+                for k, v in a["kinds"].items()
+            )
+            sm.add(
+                f"{info.get('title', _site(site))} — автопоиск",
+                f"товаров Основит вне отслеживаемого: {a.get('ours', 0)}; аналоги по видам: {kinds_text or 'не нашлось'}",
+            )
     sm.add("Изменений цен", (len(changes), INT))
     sm.add("На проверку", (len(review), INT))
     st = spot.stats(con)

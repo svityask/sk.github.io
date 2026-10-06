@@ -317,6 +317,10 @@ table.tight td, table.tight th { padding: 5px 6px; font-size: 12.5px; }
         <label class="f">Слова бренда (через запятую)</label>
         <input type="text" id="brand">
         <div class="muted small">По ним товар считается нашим: в поле «производитель» фида или в названии.</div>
+        <label class="check" style="margin-top:12px"><input type="checkbox" id="auto-analogs"> После сбора искать товары Основит и их аналоги по всему фиду</label>
+        <div class="muted small">Не только в отслеживаемых категориях: все товары Основит и товары конкурентов того же вида (штукатурки, затирки, шпаклёвки, клеи, наливные полы…) с понятной фасовкой. Ищется по уже скачанному фиду — к сайту лишних заходов нет.</div>
+        <label class="f">Аналогов на один вид товара</label>
+        <input type="number" id="auto-max" min="5" max="300" step="5">
         <label class="f">Папка для отчётов</label>
         <input type="text" id="report-dir" placeholder="Документы\Монитор Основит DIY">
       </div>
@@ -690,7 +694,7 @@ async function loadProducts() {
     r.items.map(p => {
       const d = p.prev_price ? (p.price - p.prev_price) / p.prev_price * 100 : null;
       return `<tr class="click" data-key="${esc(p.key)}"><td>${esc(p.name)} ${p.is_ours ? '<span class="chip">Основит</span>' : ""}
-          <div class="small muted">${esc(p.site_title)}${p.pack ? " · " + esc(p.pack) : ""}${p.in_last_run ? "" : " · нет в последнем сборе"}${p.excluded ? " · не конкурент" : ""}</div></td>
+          <div class="small muted">${esc(p.site_title)}${p.pack ? " · " + esc(p.pack) : ""}${p.in_last_run ? "" : " · нет в последнем сборе"}${p.excluded ? " · не конкурент" : ""}${p.found_by === "auto" ? " · автопоиск" : ""}</div></td>
         <td class="small">${esc(p.kind || "—")}${p.kind_manual ? " ✎" : ""}</td>
         <td class="num">${rub(p.price)}</td><td class="num">${p.per_unit ? rub(p.per_unit) + "/" + esc(p.pack_unit) : "—"}</td>
         <td class="num ${d > 0 ? "pos" : d < 0 ? "neg" : ""}">${d ? pct(d) : ""}</td>
@@ -991,6 +995,7 @@ function renderSettings() {
       <div class="chk-edge"></div>
     </div>`).join("");
   $("brand").value = (s.brand_words || []).join(", ");
+  $("auto-analogs").checked = s.analogs.auto !== false; $("auto-max").value = s.analogs.max_per_kind || 40;
   $("report-dir").value = s.report_dir || "";
   $("pause").value = s.edge.pause_s; $("maxpages").value = s.edge.max_pages; $("maxsec").value = s.edge.max_section_pages;
   $("ccn").value = s.crosscheck.n; $("edge-path").value = s.edge.path || "";
@@ -1011,6 +1016,7 @@ function collectSettings() {
     card.querySelectorAll("[data-f]").forEach(el => c[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value.trim());
   });
   s.brand_words = $("brand").value.split(",").map(x => x.trim()).filter(Boolean);
+  s.analogs.auto = $("auto-analogs").checked; s.analogs.max_per_kind = +$("auto-max").value || 40;
   s.report_dir = $("report-dir").value.trim();
   s.edge.pause_s = +$("pause").value; s.edge.max_pages = +$("maxpages").value; s.edge.max_section_pages = +$("maxsec").value;
   s.crosscheck.n = +$("ccn").value; s.edge.path = $("edge-path").value.trim();
