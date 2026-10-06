@@ -94,6 +94,64 @@ class Pick(unittest.TestCase):
         self.assertEqual((out, summary["ours"], summary["kinds"]), ([], 0, {}))
 
 
+class SiteSearch(unittest.TestCase):
+    def test_queries_from_ours_and_settings(self):
+        from monitor import sites
+
+        con = db.connect(os.path.join(tempfile.mkdtemp(prefix="osnovit-q-"), "m.sqlite"))
+        self.addCleanup(con.close)
+        run = db.start_run(con)
+        for code, name, vendor, qty, unit in (
+            ("1", "Штукатурка гипсовая Основит Гипсвелл PC21 G 30 кг", "Основит", 30.0, "кг"),
+            ("2", "Штукатурка гипсовая Основит Гипсвелл PC21 M 30 кг", "Основит", 30.0, "кг"),  # тот же запрос
+            ("3", "Затирка цементная Основит Плитсэйв XC6 2 кг", "Основит", 2.0, "кг"),
+            ("4", "Штукатурка гипсовая Кнауф 30 кг", "Кнауф", 30.0, "кг"),  # не наш — запроса нет
+        ):
+            db.record(
+                con,
+                run,
+                {
+                    "key": f"lemanapro:{code}",
+                    "site": "lemanapro",
+                    "name": name,
+                    "vendor": vendor,
+                    "price": 1.0,
+                    "pack_qty": qty,
+                    "pack_unit": unit,
+                    "source": "feed",
+                },
+            )
+        s = config.load()
+        s["analogs"]["queries"] = ["Кнауф Ротбанд 30 кг"]
+        texts = [q["text"] for q in analogs.site_queries(con, s, "lemanapro")]
+        self.assertEqual(texts, ["Затирка цементная 2 кг", "Кнауф Ротбанд 30 кг", "Штукатурка гипсовая 30 кг"])
+        url = sites.search_url("lemanapro", "Штукатурка гипсовая 30 кг")
+        self.assertTrue(url.startswith("https://lemanapro.ru/search/?q=") and "%20" in url)
+        self.assertEqual(
+            sites.search_url("lemanapro", "x", "https://lemanapro.ru/s?text={q}"), "https://lemanapro.ru/s?text=x"
+        )
+        self.assertIn("site%3Apetrovich.ru", sites.yandex_url("petrovich", "затирка"))
+
+    def test_plan_rotates(self):
+        qs = [{"text": str(i)} for i in range(10)]
+        seen = set()
+        for run_id in range(1, 4):
+            seen |= {q["text"] for q in analogs.plan(qs, run_id, 4)}
+        self.assertEqual(len(seen), 10)  # за три сбора по 4 — прошли все десять
+        self.assertEqual(analogs.plan(qs[:2], 7, 4), qs[:2])
+        self.assertEqual(analogs.plan(qs, 1, 0), [])
+
+    def test_fits(self):
+        q = analogs.query_of("Штукатурка гипсовая 30 кг")
+        self.assertTrue(analogs.fits({"name": "Штукатурка гипсовая Волма Слой 30 кг"}, q))
+        self.assertFalse(analogs.fits({"name": "Штукатурка цементная Юнис 25 кг"}, q))  # другая основа
+        self.assertFalse(analogs.fits({"name": "Шпатель 300 мм"}, q))
+        self.assertFalse(analogs.fits({"name": "Штукатурка гипсовая Старатели"}, q))  # фасовка неизвестна
+        self.assertTrue(analogs.fits({"name": "Штукатурка гипсовая Старатели"}, q, need_pack=False))
+        self.assertTrue(analogs.fits({"name": "Штукатурка гипсовая Старатели", "params": {"Вес, кг": ("30", "")}}, q))
+        self.assertFalse(analogs.fits({"name": "Штукатурка гипсовая готовая 10 л"}, q))  # литры против кг
+
+
 class Pipeline(unittest.TestCase):
     def run_once(self, auto):
         data = tempfile.mkdtemp(prefix="osnovit-ap-")

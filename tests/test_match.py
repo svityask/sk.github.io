@@ -154,6 +154,29 @@ class PageParsing(unittest.TestCase):
         items, _ = extract.products_from_page({"url": "https://lemanapro.ru/"}, [("u", data)], "lemanapro")
         self.assertTrue(items[0]["price_from"])
 
+    def test_product_price_is_not_a_card_price(self):
+        """«productPrice», «product-card» — обычная цена; «cardPrice», «gold», «proPrice» — по карте или для профи."""
+        self.assertEqual(extract._find_price({"productPrice": 450})[0], 450)
+        self.assertEqual(extract._find_price({"price": {"displayMain": 585, "cardPrice": 560}})[0], 585)
+        self.assertEqual(extract._find_price({"proPrice": 400, "price": 500})[0], 500)
+        self.assertEqual(extract._find_price({"price": {"retail": 579, "gold": 549}})[0], 579)
+
+    def test_listing_specs_become_params(self):
+        page = {
+            "url": "https://petrovich.ru/catalog/shtukaturki/",
+            "cards": [
+                {
+                    "url": "https://petrovich.ru/catalog/1234/700010/",
+                    "name": "Штукатурка гипсовая",
+                    "price": "410",
+                    "specs": {"Вес, кг": "30", "Основа": "Гипсовая"},
+                }
+            ],
+        }
+        items, _ = extract.products_from_page(page, [], "petrovich")
+        self.assertEqual(items[0]["params"], {"Вес, кг": ("30", ""), "Основа": ("Гипсовая", "")})
+        self.assertEqual(match.pack(items[0]["name"], items[0]["params"]), (30.0, "кг"))  # фасовка без карточки
+
     def test_card_specs_and_jsonld_weight(self):
         self.assertEqual(extract.page_params({"specs": {"Вес, кг": "25"}}), {"Вес, кг": ("25", "")})
         ld = [

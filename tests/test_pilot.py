@@ -57,6 +57,7 @@ def fill(con, n_per_site=20, ours=4):
 class PackOverride(unittest.TestCase):
     def test_manual_pack_wins_and_survives_next_run(self):
         con, _ = fresh_db("pack")
+        self.addCleanup(con.close)
         db.record(con, 1, item("1", "Шпаклевка готовая Марка", 900))  # фасовки в названии нет
         self.assertIsNone(con.execute("SELECT pack_qty FROM products").fetchone()[0])
         self.assertEqual(db.set_pack(con, "lemanapro:1", "18 кг"), (18.0, "кг"))
@@ -213,6 +214,7 @@ class SelfTest(unittest.TestCase):
 class BackupMirror(unittest.TestCase):
     def test_copy_goes_to_second_folder(self):
         con, d = fresh_db("mirror")
+        self.addCleanup(con.close)
         s = config.load()
         s["backup"]["mirror_dir"] = os.path.join(d, "Облако")
         db.record(con, 1, item("1", "Штукатурка гипсовая 30 кг", 400))

@@ -97,10 +97,19 @@ SMESI = [  # (адрес, название в выдаче, цена в выда
     ("/product/shtukaturka-osnovit-bez-koda/", "Штукатурка гипсовая Основит Гипсвелл PC21 G 30 кг", "590 ₽"),
 ]
 
+SEARCH = [  # выдача поиска по сайту (/search/?q=…): аналоги и шум
+    ("/product/knauf-rotband-77700001/", "Штукатурка гипсовая Кнауф Ротбанд 30 кг", "520 ₽"),
+    ("/product/volma-sloy-77700002/", "Штукатурка гипсовая Волма Слой 30 кг", "480 ₽"),
+    ("/product/unis-cement-77700003/", "Штукатурка цементная Юнис 25 кг", "300 ₽"),  # другая основа — не аналог
+    ("/product/shpatel-77700004/", "Шпатель 300 мм", "250 ₽"),  # не смесь
+    ("/product/starateli-77700005/", "Штукатурка гипсовая Старатели", "450 ₽"),  # фасовка — только в карточке
+]
+
 CARDS = {  # карточки: название, цена, характеристики
     "/product/kley-cerezit-cm11-22222222/": ("Клей плиточный Церезит CM11 25 кг", 520, {}),
     "/product/kley-volma-keramik-33333333/": ("Клей плиточный Волма Керамик 25 кг", 310, {"Вес, кг": "25"}),
     "/product/grunt-unis-44444444/": ("Грунтовка глубокого проникновения Юнис", 250, {"Объём, л": "10"}),
+    "/product/starateli-77700005/": ("Штукатурка гипсовая Старатели", 450, {"Вес, кг": "30"}),
 }
 
 
@@ -109,6 +118,14 @@ def _smesi(city):
         f'<div class="card"><a href="{u}">{n}</a><div><span class="price">{p}</span></div></div>' for u, n, p in SMESI
     )
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>Смеси — Лемана ПРО</title></head><body>
+{_head(city)}{cards}</body></html>"""
+
+
+def _search(city):
+    cards = "".join(
+        f'<div class="card"><a href="{u}">{n}</a><div><span class="price">{p}</span></div></div>' for u, n, p in SEARCH
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Поиск — Лемана ПРО</title></head><body>
 {_head(city)}{cards}</body></html>"""
 
 
@@ -123,6 +140,61 @@ def _card(path, city):
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>{name}</title>
 <script type="application/ld+json">{ld}</script></head><body>{_head(city)}<h1>{name}</h1><span>{price} ₽</span>
 <table>{rows}</table></body></html>"""
+
+
+# Листание выдачи — как на настоящих сайтах (по снимкам экрана):
+#   /catalog/shtukaturki/ (Петрович) — номера «1 2 3» и «Дальше» без rel="next", по 2 товара, ?p=N;
+#   /catalogue/pokazat/   (Лемана)  — кнопка «Показать ещё» без ссылки: 2 товара + ещё по 2 за нажатие (2 раза);
+#   /catalogue/lenivo/              — товары появляются через 3 с после загрузки и ещё два — после прокрутки.
+def _pager(page, total):
+    nums = "".join(
+        f'<span class="active">{i}</span>' if i == page else f'<a href="/catalog/shtukaturki/?p={i}">{i}</a>'
+        for i in range(1, total + 1)
+    )
+    nxt = f'<a href="/catalog/shtukaturki/?p={page + 1}"><span>Дальше</span> <svg></svg></a>' if page < total else ""
+    return f'<div class="pagination">{nums} {nxt}</div>'
+
+
+def _petrovich_page(page, city):
+    cards = "".join(
+        f'<div class="card"><a href="/catalog/1234/{700000 + page * 10 + i}/">Штукатурка гипсовая Марка{page}{i} 30 кг</a>'
+        f"<div>Основа: Гипсовая</div><div>Вес, кг: 30</div><span>{400 + page * 10 + i} ₽</span></div>"
+        for i in range(2)
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Штукатурки — Петрович</title></head><body>
+{_head(city)}{cards}{_pager(page, 3)}<a href="/catalog/shtukaturki/?tags=1">Показать все…</a></body></html>"""
+
+
+_POKAZAT = """<!doctype html><html><head><meta charset="utf-8"><title>Смеси — Лемана ПРО</title></head><body>HEAD
+<div id="list"></div><button id="more">Показать ещё</button>
+<script>
+let page = 0;
+function add() {
+  for (let i = 0; i < 2; i++) {
+    const n = 55500000 + page * 10 + i;
+    const d = document.createElement('div'); d.className = 'card';
+    d.innerHTML = '<a href="/product/smes-' + n + '/">Затирка цементная Марка' + n + ' 2 кг</a><span>' + (100 + page) + ' ₽</span>';
+    document.getElementById('list').appendChild(d);
+  }
+  page++;
+  if (page >= 3) document.getElementById('more').remove();
+}
+add();
+document.getElementById('more').onclick = () => setTimeout(add, 800);
+</script></body></html>"""
+
+_LENIVO = """<!doctype html><html><head><meta charset="utf-8"><title>Клеи — Лемана ПРО</title></head><body>HEAD
+<div id="list" style="min-height:3000px"></div>
+<script>
+function card(n, p) {
+  const d = document.createElement('div'); d.className = 'card';
+  d.innerHTML = '<a href="/product/kley-' + n + '/">Клей плиточный Марка' + n + ' 25 кг</a><span>' + p + ' ₽</span>';
+  document.getElementById('list').appendChild(d);
+}
+setTimeout(() => { card(66600001, 300); card(66600002, 310); }, 3000);
+let more = false;
+window.addEventListener('scroll', () => { if (!more && window.scrollY > 200) { more = true; setTimeout(() => card(66600003, 320), 300); } });
+</script></body></html>"""
 
 
 class FakeSite:
@@ -152,7 +224,10 @@ class FakeSite:
                     outer.log.append(self.path)
                 p = u.path
                 if p == "/robots.txt":
-                    return self.send("User-agent: *\nDisallow: /catalogue/zapret/\n", "text/plain; charset=utf-8")
+                    return self.send(
+                        "User-agent: *\nDisallow: /catalogue/zapret/\nDisallow: /search-closed/\n",
+                        "text/plain; charset=utf-8",
+                    )
                 if p == "/api/catalog":
                     page = int(q.get("page", ["1"])[0])
                     return self.send(json.dumps(API[page], ensure_ascii=False), "application/json")
@@ -160,6 +235,14 @@ class FakeSite:
                     return self.send(_section(int(q.get("page", ["1"])[0]), outer.city))
                 if p == "/":
                     return self.send(f"<!doctype html><title>Лемана ПРО</title>{_head(outer.city)}<h1>Главная</h1>")
+                if p == "/search/":
+                    return self.send(_search(outer.city))
+                if p == "/catalog/shtukaturki/":
+                    return self.send(_petrovich_page(int(q.get("p", ["1"])[0]), outer.city))
+                if p == "/catalogue/pokazat/":
+                    return self.send(_POKAZAT.replace("HEAD", _head(outer.city)))
+                if p == "/catalogue/lenivo/":
+                    return self.send(_LENIVO.replace("HEAD", _head(outer.city)))
                 if p == "/catalogue/smesi/":
                     return self.send(_smesi(outer.city))
                 if p in CARDS:
@@ -183,7 +266,7 @@ class FakeSite:
 
     def browser_args(self):
         return [
-            f"--host-resolver-rules=MAP lemanapro.ru 127.0.0.1:{self.port}",
+            f"--host-resolver-rules=MAP lemanapro.ru 127.0.0.1:{self.port}, MAP petrovich.ru 127.0.0.1:{self.port}",
             "--ignore-certificate-errors",
             "--no-proxy-server",
         ]

@@ -371,6 +371,26 @@ class App:
         p.pop("attrs", None)
         return p
 
+    def queries(self, site):
+        """Запросы поиска аналогов по сети: что искать на сайте и готовый поиск в Яндексе для человека."""
+        from . import analogs
+
+        if site not in sites.SITES:
+            return {"error": "нет такой сети"}
+        s = config.load()
+        conf = s["sites"][site]
+        out = []
+        for q in analogs.site_queries(self.con, s, site):
+            out.append(
+                {
+                    "text": q["text"],
+                    "site_url": sites.search_url(site, q["text"], conf.get("search_url") or ""),
+                    "yandex_url": sites.yandex_url(site, q["text"]),
+                }
+            )
+        a = s.get("analogs") or {}
+        return {"queries": out, "site_search": bool(a.get("site_search", True)), "per_run": a.get("search_queries")}
+
     def decisions_list(self):
         out = []
         for d in db.decisions_list(self.con):
@@ -537,6 +557,8 @@ def make_handler(app):
                 return self._send(200, app.condition())
             if u.path == "/api/health":
                 return self._send(200, health.check(app.con, config.load()))
+            if u.path == "/api/queries":
+                return self._send(200, app.queries(q.get("site", "")))
             if u.path == "/api/kinds":
                 return self._send(200, kinds.all_labels())
             if u.path == "/api/spot":

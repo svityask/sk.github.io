@@ -154,6 +154,7 @@ class BrowserWindow(unittest.TestCase):
         s = self.settings()
         s["report_dir"] = os.path.join(d, "reports")
         s["crosscheck"]["n"] = 2
+        s["analogs"]["site_search"] = False  # здесь — разделы и сверка; поиск аналогов — в своём тесте
         s["sites"]["petrovich"]["enabled"] = False
         s["sites"]["lemanapro"].update(
             feed=os.path.join(FIX, "lemanapro_admitad.yml"), feed_city="Москва", edge_city="Москва", edge_enabled=True
@@ -180,6 +181,36 @@ class BrowserWindow(unittest.TestCase):
         self.assertGreaterEqual(b["until"] - time.time(), 3500)
         con.close()
 
+    # ---------------------------------------------------------------- листание выдачи
+
+    def test_pages_by_numbers_and_dalshe(self):
+        """Петрович: «1 2 3 … Дальше» без rel="next" — листаем до конца раздела, характеристики берём из списка."""
+        v = self.visitor()
+        res = v.run_site("petrovich", [(1, "https://petrovich.ru/catalog/shtukaturki/", "Штукатурки")], [])
+        self.assertIsNone(res["stopped"])
+        self.assertEqual(len(res["items"]), 6)  # 3 страницы × 2 товара
+        self.assertIn("/catalog/shtukaturki/?p=3", self.site.log)
+        self.assertNotIn("/catalog/shtukaturki/?tags=1", self.site.log)  # «Показать все…» — не следующая страница
+        it = res["items"][0]
+        self.assertEqual(it["params"].get("Вес, кг"), ("30", ""))  # из списка, без захода в карточку
+        self.assertEqual(it["params"].get("Основа"), ("Гипсовая", ""))
+
+    def test_show_more_button(self):
+        """Лемана: кнопка «Показать ещё» без ссылки — нажимаем, пока товары прибавляются."""
+        v = self.visitor()
+        res = v.run_site("lemanapro", [(1, "https://lemanapro.ru/catalogue/pokazat/", "Затирки")], [])
+        self.assertIsNone(res["stopped"])
+        self.assertEqual(len(res["items"]), 6)  # 2 + 2 нажатия по 2
+        self.assertEqual(res["pages"], 4)  # robots.txt + страница + 2 нажатия: нажатие считается как страница
+
+    def test_late_and_lazy_items(self):
+        """Товары дорисовываются через 3 с и догружаются прокруткой — не считаем страницу пустой."""
+        v = self.visitor()
+        res = v.run_site("lemanapro", [(1, "https://lemanapro.ru/catalogue/lenivo/", "Клеи")], [])
+        codes = {i["code"] for i in res["items"]}
+        self.assertTrue({"66600001", "66600002"} <= codes)
+        self.assertEqual(v.meter.empty, 0)
+
     # ---------------------------------------------------------------- стратегия «полка → карточки»
 
     FEED = """<?xml version="1.0" encoding="UTF-8"?>
@@ -196,7 +227,7 @@ class BrowserWindow(unittest.TestCase):
 <name>Штукатурка гипсовая Основит Гипсвелл PC21 G 30 кг</name><vendor>Основит</vendor></offer>
 </offers></shop></yml_catalog>"""
 
-    def strategy_run(self, feed_city):
+    def strategy_run(self, feed_city, search=False):
         d = os.path.join(config.DATA, "strategy-" + feed_city)
         shutil.rmtree(d, ignore_errors=True)
         os.makedirs(d)
@@ -208,6 +239,7 @@ class BrowserWindow(unittest.TestCase):
         s = self.settings()
         s["report_dir"] = os.path.join(d, "reports")
         s["crosscheck"]["n"] = 0  # случайную сверку выключаем: проверяем только решения стратегии
+        s["analogs"]["site_search"] = search
         s["sites"]["petrovich"]["enabled"] = False
         s["sites"]["lemanapro"].update(
             feed=feed, feed_city=feed_city, edge_city="", edge_enabled=True, edge_prepare=True
@@ -273,6 +305,29 @@ class BrowserWindow(unittest.TestCase):
         self.assertIn("Санкт-Петербург", asked[1])
         self.assertTrue(any("не смешать цены" in w for w in r["warnings"]))
         self.assertNotIn("/catalogue/smesi/", self.site.log[n:])  # с сайта ничего не собирали
+
+    def test_site_search_for_analogs(self):
+        """Поиск аналогов по названиям: запрос из вида и фасовки Основит, в пул — только тот же вид с фасовкой."""
+        n = len(self.site.log)
+        r, con, _asked = self.strategy_run("Москва", search=True)
+        log = self.site.log[n:]
+        searches = [p for p in log if p.startswith("/search/")]
+        self.assertTrue(any("30%20%D0%BA%D0%B3" in p or "30 кг" in p for p in searches))  # «… 30 кг» — по фасовке
+        st = r["sites"]["lemanapro"]["edge"]["strategy"]["searched"]
+        q = next(k for k in st if k.startswith("Штукатурка гипсовая"))
+        self.assertEqual(st[q]["kept"], 3)  # Кнауф, Волма, Старатели (фасовка — из карточки)
+        self.assertIn("/product/starateli-77700005/", log)  # фасовки нет в выдаче — открыли карточку
+        self.assertNotIn("/product/unis-cement-77700003/", log)  # не тот вид — карточку не открывали
+        auto = {row[0] for row in con.execute("SELECT key FROM products WHERE found_by='auto'")}
+        self.assertTrue({"lemanapro:77700001", "lemanapro:77700002", "lemanapro:77700005"} <= auto)
+        self.assertNotIn("lemanapro:77700003", auto)
+        self.assertNotIn("lemanapro:77700004", auto)
+
+    def test_site_search_closed_by_robots(self):
+        v = self.visitor()
+        res = v.run_site("lemanapro", [], [], searches=[("штукатурка", "https://lemanapro.ru/search-closed/?q=x")])
+        self.assertTrue(any("запрещён robots.txt" in n for n in res["notes"]))
+        self.assertNotIn("/search-closed/?q=x", self.site.log)
 
 
 class StopIsAnException(unittest.TestCase):

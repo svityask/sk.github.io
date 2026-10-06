@@ -118,6 +118,7 @@ def fetch(
                 shutil.copyfileobj(resp, out, 1 << 20)
                 return 200, resp.headers.get("ETag"), resp.headers.get("Last-Modified")
         except urllib.error.HTTPError as e:
+            e.close()  # ответ с ошибкой держит соединение открытым — закрываем сразу
             if e.code == 304:
                 return 304, None, None
             if e.code == 429:

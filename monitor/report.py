@@ -300,6 +300,8 @@ def build(settings, con, run_id, products, market, review, stats, summary, group
                 text += f"; остановлено: {e['stopped']}"
             sm.add(f"{t} — сайт (Edge)", text)
             st_ = e.get("strategy")
+            for q, v in ((st_ or {}).get("searched") or {}).items():
+                sm.add(f"{t} — поиск «{q}»", f"в выдаче {v['found']} товаров, взято аналогов {v['kept']}")
             if st_:
                 how = ", ".join(f"{k} — {v}" for k, v in (st_.get("matched") or {}).items()) or "нет"
                 deep = ", ".join(f"{k} — {v}" for k, v in (st_.get("deep") or {}).items()) or "не понадобились"

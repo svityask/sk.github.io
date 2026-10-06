@@ -5,7 +5,7 @@
 
 import re
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit, urlunsplit
 
 SITES: dict[str, dict[str, Any]] = {
     "petrovich": {
@@ -13,6 +13,7 @@ SITES: dict[str, dict[str, Any]] = {
         "domains": ("petrovich.ru",),
         "home": "https://petrovich.ru/",
         "data_hosts": ("petrovich.ru",),  # откуда страница сама берёт данные
+        "search": "https://petrovich.ru/search/?q={q}",  # поиск по сайту; меняется в настройках (search_url)
         # город задаётся поддоменом
         "subdomain_city": {"": "Санкт-Петербург", "www": "Санкт-Петербург", "moscow": "Москва"},
     },
@@ -21,6 +22,7 @@ SITES: dict[str, dict[str, Any]] = {
         "domains": ("lemanapro.ru", "leroymerlin.ru"),
         "home": "https://lemanapro.ru/",
         "data_hosts": ("lemanapro.ru", "api-lmn.ru"),
+        "search": "https://lemanapro.ru/search/?q={q}",
         "subdomain_city": {},
     },
 }
@@ -154,3 +156,15 @@ def product_key(site, code=None, url=None, fallback_id=None):
     """Единый ключ товара: одинаковый для фида и для окна Edge."""
     c = code or (code_from_url(url) if url else None) or (str(fallback_id).strip() if fallback_id else None)
     return f"{site}:{c}" if c else None
+
+
+def search_url(site, query, template=""):
+    """Адрес поиска по сайту сети. template — из настроек (search_url), иначе — шаблон сети."""
+    t = (template or "").strip() or SITES[site].get("search") or ""
+    return t.replace("{q}", quote(query)) if "{q}" in t else ""
+
+
+def yandex_url(site, query):
+    """Готовый поиск в Яндексе по одной сети — человек откроет его в своём браузере и вставит ссылки в приложение."""
+    domain = SITES[site]["domains"][0]
+    return "https://yandex.ru/search/?text=" + quote(f"site:{domain} {query}")

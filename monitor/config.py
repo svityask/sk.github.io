@@ -6,7 +6,7 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = "2.6.0"
+VERSION = "2.7.0"
 DATA = os.environ.get("OSNOVIT_DIY_DATA") or os.path.join(ROOT, "data")
 FEEDS_DIR = os.path.join(DATA, "feeds")
 SAMPLES_DIR = os.path.join(DATA, "samples")
@@ -25,6 +25,7 @@ DEFAULTS = {
             "edge_enabled": True,  # дособирать в окне Edge то, чего нет в фиде
             "edge_city": "",  # город в окне Edge; заполняется сам, когда человек выбирает город в окне
             "edge_prepare": True,  # сбор из окна приложения: сначала человек открывает сайт и выбирает город
+            "search_url": "",  # адрес поиска по сайту с {q}; пусто — поиск сети по умолчанию
         },
         "lemanapro": {
             "enabled": True,
@@ -33,12 +34,15 @@ DEFAULTS = {
             "edge_enabled": True,
             "edge_city": "",
             "edge_prepare": True,
+            "search_url": "",
         },
     },
     "edge": {
         "pause_s": 12,  # пауза между страницами, как у человека (±30 %)
-        "max_pages": 40,  # не больше страниц за один сбор на сеть
-        "max_section_pages": 5,  # страниц выдачи на один раздел
+        "max_pages": 80,  # не больше страниц за один сбор на сеть (каждая — с паузой как у человека)
+        "max_section_pages": 30,  # страниц выдачи на один раздел: листаем до конца, но не бесконечно
+        "wait_items_s": 10,  # сколько ждать, пока товары дорисуются на странице
+        "search_pages": 2,  # страниц выдачи на один поисковый запрос
         "path": "",  # путь к msedge.exe; пусто — найти самому
         "port": 9224,
         "wait_check_s": 25,  # сколько ждать, пока проверка браузера уйдёт сама
@@ -59,6 +63,9 @@ DEFAULTS = {
         "auto": True,  # после сбора искать товары Основит и их аналоги по всему фиду, а не только в отслеживаемом
         "max_per_kind": 40,  # аналогов на один вид товара (штукатурка гипсовая, затирка…) на сеть
         "types": [],  # какие виды искать; пусто — все, что есть у Основит
+        "site_search": True,  # искать аналоги и поиском на сайте сети (окно Edge), если robots.txt разрешает
+        "search_queries": 4,  # запросов поиска за сбор на сеть (по кругу: за несколько сборов пройдут все)
+        "queries": [],  # свои запросы, по одному: «Кнауф Ротбанд 30 кг», «затирка эпоксидная»
     },
     "report_dir": "",
     "failures": {
@@ -134,7 +141,7 @@ def save(settings):
     e = clean["edge"]
     e["pause_s"] = max(5, float(e.get("pause_s") or 12))  # быстрее человека не ходим
     e["max_pages"] = max(1, min(200, int(e.get("max_pages") or 40)))
-    e["max_section_pages"] = max(1, min(20, int(e.get("max_section_pages") or 5)))
+    e["max_section_pages"] = max(1, min(100, int(e.get("max_section_pages") or 30)))
     clean["feed_interval_h"] = max(1, float(clean.get("feed_interval_h") or 6))
     cc = clean["crosscheck"]
     cc["n"] = max(0, min(30, int(cc.get("n") or 0)))
@@ -142,6 +149,9 @@ def save(settings):
     clean["health"]["max_age_h"] = max(2, float(clean["health"].get("max_age_h") or 26))
     an = clean["analogs"]
     an["max_per_kind"] = max(5, min(300, int(an.get("max_per_kind") or 40)))
+    an["search_queries"] = max(0, min(20, int(an.get("search_queries") or 0)))
+    an["queries"] = [" ".join(q.split()) for q in an.get("queries") or [] if q.strip()][:50]
+    e["search_pages"] = max(1, min(10, int(e.get("search_pages") or 2)))
     tmp = SETTINGS_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(clean, f, ensure_ascii=False, indent=2)

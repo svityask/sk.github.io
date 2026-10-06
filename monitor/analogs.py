@@ -10,9 +10,10 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
-from . import analysis, kinds, match
+from . import analysis, db, kinds, match, units
 
 AUTO = "auto"  # products.found_by: найден автопоиском; 'tracked' — через «Что отслеживаем»
 
@@ -77,3 +78,69 @@ def pick(
         out += taken
         summary["kinds"][t] = {"found": len(lst), "taken": len(taken)}
     return out, summary
+
+
+# ---------------------------------------------------------------- поиск аналогов на сайте сети
+
+
+def query_of(text: str) -> dict[str, Any]:
+    """Запрос поиска: текст, вид товара (признаки) и единица из фасовки в тексте."""
+    text = " ".join((text or "").split())
+    _qty, unit = match.pack(text)
+    return {"text": text, "attrs": kinds.attrs(text), "unit": unit}
+
+
+def site_queries(con, settings: dict, site: str, found: dict[str, dict[str, Any]] | None = None) -> list[dict]:
+    """Запросы для поиска аналогов на сайте: по каждому виду и фасовке товаров Основит + свои из настроек.
+
+    «Штукатурка гипсовая 30 кг», «Затирка цементная 2 кг»… — так ищет человек. Повторы убираются.
+    """
+    brand = settings.get("brand_words") or []
+    since = time.time() - 60 * 86400
+    rows = [
+        dict(r)
+        for r in con.execute(
+            "SELECT key, name, vendor, pack_qty, pack_unit FROM products WHERE site=? AND last_seen>=?", (site, since)
+        )
+    ]
+    rows += [o for o in (found or {}).values() if o.get("site", site) == site]
+    overrides = db.kind_overrides(con)
+    out: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        if not analysis.is_ours(r.get("name"), r.get("vendor"), brand)[0]:
+            continue
+        a, _manual = kinds.attrs_of({"key": r.get("key"), "name": r.get("name")}, overrides)
+        label = kinds.label(a)
+        if not label:
+            continue
+        qty, unit = (r.get("pack_qty"), r.get("pack_unit")) if r.get("pack_qty") else match.pack(r.get("name"))
+        text = f"{label} {units.pack_label(qty, unit)}".strip()
+        out.setdefault(text.lower(), {"text": text, "attrs": a, "unit": unit})
+    for line in (settings.get("analogs") or {}).get("queries") or []:
+        q = query_of(line)
+        if q["text"]:
+            out.setdefault(q["text"].lower(), q)
+    return sorted(out.values(), key=lambda q: q["text"])
+
+
+def plan(queries: list[dict], run_id: int, n: int) -> list[dict]:
+    """Какие запросы делать в этом сборе: по n за раз, по кругу — за несколько сборов пройдут все."""
+    if n <= 0 or not queries:
+        return []
+    if len(queries) <= n:
+        return list(queries)
+    start = (run_id * n) % len(queries)
+    return [queries[(start + i) % len(queries)] for i in range(n)]
+
+
+def fits(item: dict[str, Any], q: dict[str, Any], need_pack: bool = True) -> bool:
+    """Подходит ли товар из выдачи поиска к запросу: тот же вид без противоречий, та же единица, понятная фасовка."""
+    a = kinds.attrs(item.get("name"))
+    if not a:
+        return False
+    if q.get("attrs") and not kinds.compatible(q["attrs"], a):
+        return False
+    qty, unit = match.pack(item.get("name"), item.get("params"))
+    if unit and q.get("unit") and unit != q["unit"]:
+        return False
+    return bool(qty) or not need_pack
