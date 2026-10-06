@@ -283,6 +283,15 @@ def build(settings, con, run_id, products, market, review, stats, summary, group
             if e.get("stopped"):
                 text += f"; остановлено: {e['stopped']}"
             sm.add(f"{t} — сайт (Edge)", text)
+            st_ = e.get("strategy")
+            if st_:
+                how = ", ".join(f"{k} — {v}" for k, v in (st_.get("matched") or {}).items()) or "нет"
+                deep = ", ".join(f"{k} — {v}" for k, v in (st_.get("deep") or {}).items()) or "не понадобились"
+                sm.add(
+                    f"{t} — полка и карточки",
+                    f"с полки (выдача разделов) {st_.get('shallow', 0)} товаров; сопоставлено с фидом: {how}; "
+                    f"карточек открыто {st_.get('deep_pages', 0)} ({deep})",
+                )
             for n in e.get("notes") or []:
                 sm.add("", n)
         c = info.get("crosscheck")

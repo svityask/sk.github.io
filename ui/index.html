@@ -982,8 +982,10 @@ function renderSettings() {
       <div class="chk-feed"></div>
       <h3>Сайт в окне Edge — запасной путь</h3>
       <label class="check"><input type="checkbox" data-f="edge_enabled" ${c.edge_enabled ? "checked" : ""}> дособирать с сайта то, чего нет в фиде</label>
+      <label class="check"><input type="checkbox" data-f="edge_prepare" ${c.edge_prepare !== false ? "checked" : ""}> перед сбором открывать сайт мне: я выберу город и, если надо, пройду проверку</label>
+      <div class="muted small">При сборе из окна приложения окно Edge откроется на экране. Выберите город и нажмите «Готово» на Главной — дальше приложение соберёт само: сначала страницы разделов, карточки товаров — только когда без них не обойтись (фасовка, цена «от», расхождение с фидом больше порога, вид товара). Сбор по расписанию идёт без этого шага, с последним выбранным городом.</div>
       <label class="f">Город в окне Edge</label>
-      <input type="text" data-f="edge_city" value="${esc(c.edge_city)}" placeholder="Пусто — не сверять">
+      <input type="text" data-f="edge_city" value="${esc(c.edge_city)}" placeholder="Заполнится сам, когда вы выберете город в окне">
       <div class="row" style="margin-top:10px"><button class="btn" data-check="edge">Открыть сайт в окне сбора</button></div>
       <div class="chk-edge"></div>
     </div>`).join("");

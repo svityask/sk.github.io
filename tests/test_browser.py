@@ -11,6 +11,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 
@@ -178,6 +179,100 @@ class BrowserWindow(unittest.TestCase):
         b = next(x for x in guard.states(con) if x["source"] == "edge")
         self.assertGreaterEqual(b["until"] - time.time(), 3500)
         con.close()
+
+    # ---------------------------------------------------------------- стратегия «полка → карточки»
+
+    FEED = """<?xml version="1.0" encoding="UTF-8"?>
+<yml_catalog date="2026-10-06 06:00"><shop><name>Лемана ПРО</name>
+<categories><category id="1">Смеси</category></categories><offers>
+<offer id="11111111" available="true"><url>https://lemanapro.ru/product/kley-osnovit-pliteks-11111111/</url>
+<price>400</price><currencyId>RUR</currencyId><categoryId>1</categoryId>
+<name>Клей плиточный Основит Плитэкс C1 25 кг</name><vendor>Основит</vendor></offer>
+<offer id="22222222" available="true"><url>https://lemanapro.ru/product/kley-cerezit-cm11-22222222/</url>
+<price>450</price><currencyId>RUR</currencyId><categoryId>1</categoryId>
+<name>Клей плиточный Церезит CM11 25 кг</name><vendor>Церезит</vendor></offer>
+<offer id="82065432" available="true"><url>https://lemanapro.ru/product/shtukaturka-osnovit-82065432/</url>
+<price>590</price><currencyId>RUR</currencyId><categoryId>1</categoryId>
+<name>Штукатурка гипсовая Основит Гипсвелл PC21 G 30 кг</name><vendor>Основит</vendor></offer>
+</offers></shop></yml_catalog>"""
+
+    def strategy_run(self, feed_city):
+        d = os.path.join(config.DATA, "strategy-" + feed_city)
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d)
+        feed = os.path.join(d, "feed.yml")
+        with open(feed, "w", encoding="utf-8") as f:
+            f.write(self.FEED)
+        con = db.connect(os.path.join(d, "m.sqlite"))
+        self.addCleanup(con.close)
+        s = self.settings()
+        s["report_dir"] = os.path.join(d, "reports")
+        s["crosscheck"]["n"] = 0  # случайную сверку выключаем: проверяем только решения стратегии
+        s["sites"]["petrovich"]["enabled"] = False
+        s["sites"]["lemanapro"].update(
+            feed=feed, feed_city=feed_city, edge_city="", edge_enabled=True, edge_prepare=True
+        )
+        db.add_tracked(con, "lemanapro", "category", "1", "Смеси")
+        db.add_tracked(con, "lemanapro", "section", "https://lemanapro.ru/catalogue/smesi/", "Смеси")
+        status = collect.Status()
+        asked = []
+        stop = threading.Event()
+
+        def human():  # «человек»: выбрал город и жмёт «Готово» на каждую новую просьбу приложения
+            seen = None
+            while not stop.is_set():
+                msg = status.human
+                if msg and msg is not seen:  # новая просьба может прийти сразу за прошлой — сравниваем сам объект
+                    seen = msg
+                    asked.append(msg)
+                    status.human_done()
+                time.sleep(0.05)
+
+        t = threading.Thread(target=human, daemon=True)
+        t.start()
+        try:
+            r = collect.run(s, status, con=con, interactive=True)
+        finally:
+            stop.set()
+            t.join(5)
+        self.assertNotIn("error", r, r.get("trace"))
+        return r, con, asked
+
+    def test_shallow_match_deep(self):
+        r, con, asked = self.strategy_run("Москва")
+        self.assertEqual(len(asked), 1)
+        self.assertIn("Выберите в нём город", asked[0])
+        log = self.site.log
+        self.assertIn("/", log)  # окно открыли на главной — для человека
+        self.assertIn("/catalogue/smesi/", log)
+        # deep — только где нужно
+        self.assertIn("/product/kley-cerezit-cm11-22222222/", log)  # 520 на полке против 450 в фиде
+        self.assertIn("/product/kley-volma-keramik-33333333/", log)  # «от 300 ₽» и нет фасовки
+        self.assertIn("/product/grunt-unis-44444444/", log)  # нет фасовки
+        self.assertNotIn("/product/kley-osnovit-pliteks-11111111/", log)  # цена совпала с фидом
+        self.assertNotIn("/product/shtukaturka-osnovit-bez-koda/", log)  # сопоставлен по названию, цена совпала
+        st = r["sites"]["lemanapro"]["edge"]["strategy"]
+        self.assertEqual(st["shallow"], 5)
+        self.assertEqual(st["matched"], {"артикул": 2, "название": 1})
+        self.assertEqual(st["deep_pages"], 3)
+        self.assertEqual(st["deep"], {"расходится с фидом": 1, "цена от": 1, "фасовка": 2})
+        prods = {p["key"]: p for p in db.products_of_run(con, r["run_id"])}
+        volma = prods["lemanapro:33333333"]
+        self.assertEqual((volma["price"], volma["pack_qty"], volma["pack_unit"]), (310, 25, "кг"))  # с карточки
+        grunt = prods["lemanapro:44444444"]
+        self.assertEqual((grunt["pack_qty"], grunt["pack_unit"]), (10, "л"))  # фасовка из характеристик
+        self.assertNotIn("lemanapro:shtukaturka-osnovit-bez-koda", prods)  # не задвоился — это товар фида
+        gaps = {i["key"] for i in r["review_items"] if i["kind"] == "feedgap"}
+        self.assertEqual(gaps, {"lemanapro:22222222"})  # расхождение подтвердила карточка
+        self.assertEqual(config.load()["sites"]["lemanapro"]["edge_city"], "Москва")  # город запомнен
+
+    def test_other_city_in_window_is_not_mixed(self):
+        n = len(self.site.log)
+        r, _con, asked = self.strategy_run("Санкт-Петербург")
+        self.assertEqual(len(asked), 2)  # второй раз попросили выбрать город фида
+        self.assertIn("Санкт-Петербург", asked[1])
+        self.assertTrue(any("не смешать цены" in w for w in r["warnings"]))
+        self.assertNotIn("/catalogue/smesi/", self.site.log[n:])  # с сайта ничего не собирали
 
 
 class StopIsAnException(unittest.TestCase):
