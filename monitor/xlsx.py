@@ -52,8 +52,19 @@ def _col(i):
     return s
 
 
+MAX_CELL = 32767  # больше символов в ячейке Excel не принимает
+MAX_FORMULA_STR = 255  # длина строки внутри формулы (адрес и подпись в HYPERLINK)
+
+
 def _t(text):
-    return escape(_BAD.sub("", str(text)))
+    return escape(_BAD.sub("", str(text))[:MAX_CELL])
+
+
+def _formula_str(text):
+    """Строка для формулы: кавычки удвоены, а итог не длиннее 255 — иначе Excel «восстанавливает» файл."""
+    out = _BAD.sub("", str(text)).replace('"', '""')[:MAX_FORMULA_STR]
+    tail = len(out) - len(out.rstrip('"'))
+    return out[:-1] if tail % 2 else out  # обрезка не должна разрезать удвоенную кавычку пополам
 
 
 def _cell(ref, value, style):
@@ -65,9 +76,9 @@ def _cell(ref, value, style):
     if isinstance(value, Link):
         if not value.url:
             return _cell(ref, value.text, style)
-        url = value.url.replace('"', "%22")[:255]
-        label = str(value.text)[:250]
-        formula = 'HYPERLINK("' + url + '","' + label.replace('"', '""') + '")'
+        url = value.url.replace('"', "%22")[:MAX_FORMULA_STR]
+        label = str(value.text)
+        formula = 'HYPERLINK("' + url + '","' + _formula_str(label) + '")'
         return f'<c r="{ref}" s="{LINK}" t="str"><f>{_t(formula)}</f><v>{_t(label)}</v></c>'
     if isinstance(value, bool):
         return _cell(ref, "да" if value else "нет", style)

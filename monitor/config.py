@@ -6,7 +6,7 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = "2.4.1"
+VERSION = "2.4.2"
 DATA = os.environ.get("OSNOVIT_DIY_DATA") or os.path.join(ROOT, "data")
 FEEDS_DIR = os.path.join(DATA, "feeds")
 SAMPLES_DIR = os.path.join(DATA, "samples")

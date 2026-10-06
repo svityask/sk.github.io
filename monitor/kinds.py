@@ -4,6 +4,7 @@
 и цементные, и готовые полимерные — у них разная цена за кг. Вид всегда можно поправить вручную.
 """
 
+import functools
 import re
 
 # (тип, условие). Порядок важен: первое совпадение побеждает.
@@ -56,30 +57,46 @@ _TILE_CLASS = re.compile(r"(?<![a-zа-я0-9])[cс]\s?([012])(?:\s?t)?(?:\s?e)?(?
 _GRADE = re.compile(r"(?<![a-zа-я0-9])[mм]\s?-?(100|150|200|250|300|350|400|450|500)(?![0-9])", re.I)
 
 
+# скомпилированные выражения: вид распознаётся для каждого товара при каждом поиске и сборе
+_TYPES_RX = [(label, tuple(re.compile(c) for c in conds)) for label, conds in _TYPES]
+_BASES_RX = [(label, re.compile(rx)) for label, rx in _BASES]
+_FINISH_RX = [(label, re.compile(rx)) for label, rx in _FINISH]
+
+
 def _find(pairs, text):
     for label, rx in pairs:
-        if re.search(rx, text):
+        if rx.search(text):
             return label
     return None
 
 
 def attrs(name):
     """Признаки товара: {'type', 'base', 'finish', 'grade'} — неизвестные не попадают в словарь."""
-    text = " " + (name or "").lower().replace("ё", "е") + " "
+    return dict(_attrs(name or ""))  # копия: вызывающий может менять словарь, кэш — нет
+
+
+@functools.lru_cache(maxsize=100_000)
+def _attrs(name):
+    """Признаки как кортеж пар (неизменяемый, чтобы кэшировать): названия повторяются из сбора в сбор."""
+    return tuple(_parse(name).items())
+
+
+def _parse(name):
+    text = " " + name.lower().replace("ё", "е") + " "
     ptype = None
-    for label, conds in _TYPES:
-        if all(re.search(c, text) for c in conds):
+    for label, conds in _TYPES_RX:
+        if all(c.search(text) for c in conds):
             ptype = label
             break
     if not ptype:
         return {}
     a = {"type": ptype}
     if ptype in ("Штукатурка", "Штукатурка декоративная", "Шпаклёвка", "Затирка", "Наливной пол"):
-        base = _find(_BASES, text)
+        base = _find(_BASES_RX, text)
         if base:
             a["base"] = base
     if ptype in ("Шпаклёвка", "Наливной пол"):
-        fin = _find(_FINISH, text)
+        fin = _find(_FINISH_RX, text)
         if fin:
             a["finish"] = fin
     if ptype == "Клей плиточный":
