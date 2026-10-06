@@ -6,7 +6,7 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = "2.4.2"
+VERSION = "2.5.0"
 DATA = os.environ.get("OSNOVIT_DIY_DATA") or os.path.join(ROOT, "data")
 FEEDS_DIR = os.path.join(DATA, "feeds")
 SAMPLES_DIR = os.path.join(DATA, "samples")
@@ -23,7 +23,8 @@ DEFAULTS = {
             "feed": "",  # ссылка из Admitad «Товары» или путь к файлу
             "feed_city": "",  # для какого города цены в фиде (из описания программы)
             "edge_enabled": True,  # дособирать в окне Edge то, чего нет в фиде
-            "edge_city": "",  # город в окне Edge; пусто — не сверять
+            "edge_city": "",  # город в окне Edge; заполняется сам, когда человек выбирает город в окне
+            "edge_prepare": True,  # сбор из окна приложения: сначала человек открывает сайт и выбирает город
         },
         "lemanapro": {
             "enabled": True,
@@ -31,6 +32,7 @@ DEFAULTS = {
             "feed_city": "",
             "edge_enabled": True,
             "edge_city": "",
+            "edge_prepare": True,
         },
     },
     "edge": {
@@ -41,6 +43,7 @@ DEFAULTS = {
         "port": 9224,
         "wait_check_s": 25,  # сколько ждать, пока проверка браузера уйдёт сама
         "wait_human_s": 300,  # сколько ждать человека, если не ушла
+        "wait_prepare_s": 600,  # сколько ждать, пока человек подготовит окно (город, проверка)
     },
     "feed_interval_h": 6,
     "crosscheck": {
@@ -141,11 +144,13 @@ def save(settings):
     return clean
 
 
+def default_report_dir():
+    home = os.path.expanduser("~")
+    docs = os.path.join(home, "Documents")
+    return os.path.join(docs if os.path.isdir(docs) else home, "Монитор Основит DIY")
+
+
 def report_dir(settings):
-    d = settings.get("report_dir")
-    if not d:
-        home = os.path.expanduser("~")
-        docs = os.path.join(home, "Documents")
-        d = os.path.join(docs if os.path.isdir(docs) else home, "Монитор Основит DIY")
+    d = settings.get("report_dir") or default_report_dir()
     os.makedirs(d, exist_ok=True)
     return d

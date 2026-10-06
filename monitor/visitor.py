@@ -15,11 +15,12 @@ import gzip
 import json
 import os
 import random
+import subprocess
 import time
 import urllib.robotparser
 from typing import Any
 
-from . import cdp, config, dumps, extract, guard, log, sites
+from . import cdp, config, dumps, extract, guard, log, match, sites
 from .metrics import Meter
 
 MAX_SAMPLES = 40
@@ -71,9 +72,31 @@ class Visitor:
         return self._tab is not None
 
     def close(self):
-        if self._tab:
-            self._tab.close()
-        self._tab = None
+        """Закрывает вкладку сбора, а окно Edge — если его запустили мы.
+
+        Окно, которое уже было открыто (например, человек выбирал в нём город), не трогаем. Запущенное нами
+        окно стоит за краем экрана: если его не закрыть, оно так и висело бы невидимым после сбора
+        по расписанию, с открытым портом отладки.
+        """
+        tab, self._tab = self._tab, None
+        if self.proc is not None and tab is not None:
+            try:
+                tab.send("Browser.close", timeout=10)  # штатно: профиль (город, cookies) сохранится
+            except (cdp.BrowserError, OSError):
+                pass
+        if tab is not None:
+            tab.close()
+        proc, self.proc = self.proc, None
+        if proc is not None:
+            try:
+                proc.wait(15)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                try:
+                    proc.wait(10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            log.info("browser.closed", "Окно сбора закрыто")
 
     # ------------------------------------------------------------ шаги
 
@@ -229,6 +252,46 @@ class Visitor:
         log.info("page.check_human", "Проверку прошёл человек", url=url)
         return page, 200
 
+    def prepare(self, site, expect_city=""):
+        """Окно готовит человек: открывает сайт, выбирает город, если надо — проходит проверку, жмёт «Готово».
+
+        Так сбор идёт в обычной сессии посетителя с выбранным им городом. Приложение ничего не обходит:
+        проверку проходит человек, дальше — те же паузы, лимит страниц и robots.txt.
+        Возвращает город, выбранный в окне (или None, если прочитать его не удалось).
+        """
+        title = sites.SITES[site]["title"]
+        home = sites.SITES[site]["home"]
+        self.site = site
+        if self.allowed(home):
+            self._open(home)
+        self.tab.show_window(True)
+        ask = f"{title}: окно сбора открыто. Выберите в нём город (и магазин); если сайт попросит — пройдите проверку. "
+        try:
+            for attempt in range(2):
+                ok = self.status.ask_human(
+                    ask + "Потом нажмите «Готово» — дальше приложение соберёт само.",
+                    lambda: False,  # «Готово» — только от человека: когда город выбран, знает он
+                    float(self.s.get("wait_prepare_s") or 600),
+                )
+                if not ok:
+                    raise Stop("окно сбора не подготовили — сайт пропущен в этот раз")
+                page = self.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or {}
+                if extract.is_check_page(page):
+                    ask = f"{title}: сайт всё ещё показывает проверку. Пройдите её в окне. "
+                    continue
+                city = extract.city_of(page) or sites.city_from_url(page.get("url") or "")
+                if expect_city and city and not extract.same_city(expect_city, city) and attempt == 0:
+                    ask = (
+                        f"{title}: в окне выбран город «{city}», а цены фида — для «{expect_city}». "
+                        f"Выберите «{expect_city}», чтобы не смешать цены двух городов. "
+                    )
+                    continue
+                log.info("window.prepared", f"Окно подготовлено, город: {city or 'не прочитан'}", city=city)
+                return city
+            raise Stop("проверку в окне не прошли — сайт пропущен в этот раз")
+        finally:
+            self.tab.show_window(False)
+
     def _sample(self, site, page, via):
         """Образец страницы, прочитанной только по вёрстке, — чтобы перевести разбор на данные (без снимка)."""
         try:
@@ -250,11 +313,15 @@ class Visitor:
 
     # ------------------------------------------------------------ сеть целиком
 
-    def run_site(self, site, sections, products, expect_city="", checks=(), checks_n=0, meter=None):
+    def run_site(self, site, sections, products, expect_city="", checks=(), checks_n=0, meter=None, deep=None):
         """sections: [(group_id, url, title)], products: [(group_id, url, code)], checks: [(key, url, code)].
 
-        Возвращает {'items', 'checks', 'notes', 'stopped', 'failed', 'blocked', 'pages', 'via', 'city'}.
-        blocked = {'reason', 'retry_after', 'detail'} — источник попросил остановиться (429, капча).
+        Порядок: shallow — страницы разделов; карточки отслеживаемых товаров, которых нет в выдаче; deep —
+        карточки товаров с полки, которые отобрал deep(items) -> [(товар, [причины])] (см. match.py);
+        сверка фида с полкой. Все шаги — с одним лимитом страниц и теми же паузами.
+
+        Возвращает {'items', 'checks', 'notes', 'stopped', 'failed', 'blocked', 'pages', 'via', 'city',
+        'shallow', 'deep'}. blocked = {'reason', 'retry_after', 'detail'} — источник попросил остановиться.
         """
         self.site = site
         self.meter = meter or Meter(site, "edge")
@@ -270,6 +337,8 @@ class Visitor:
             "city": None,
             "skipped": 0,
             "refusals": 0,
+            "shallow": 0,  # товаров с полки (из выдачи разделов)
+            "deep": [],  # [{'url', 'reasons', 'ok'}] — открытые по решению карточки
         }
         start_pages = self.pages
         title = sites.SITES[site]["title"]
@@ -310,7 +379,9 @@ class Visitor:
                     if not items or not nxt or nxt in visited or sites.site_of(nxt) != site:
                         break
                     url = nxt  # без normalize: номер страницы — в параметрах адреса
-            got = {it.get("code") for it in res["items"]} | {it.get("url") for it in res["items"]}
+            res["shallow"] = len(res["items"])
+            # пустой артикул или адрес не считается «уже найден» — иначе пропускались бы все карточки без артикула
+            got = {v for it in res["items"] for v in (it.get("code"), it.get("url")) if v}
             for gid, url, code in products:
                 url = sites.normalize_url(url)
                 if (code or sites.code_from_url(url)) in got or url in got:
@@ -319,6 +390,19 @@ class Visitor:
                 if it:
                     it["group_id"] = gid
                     res["items"].append(it)
+                    got |= {v for v in (it.get("code"), it.get("url")) if v}  # тот же товар второй раз не открываем
+            # deep: карточки товаров с полки — только тех, где без карточки не обойтись
+            for it, reasons in deep(res["items"][: res["shallow"]]) if deep else []:
+                url = it.get("url")
+                if not url:
+                    continue
+                card = self._card(
+                    site, url, it.get("code"), expect_city, res, f"{title}: уточняю ({', '.join(reasons)}) {url}"
+                )
+                if card:
+                    match.merge_card(it, card)
+                    it["deep"] = reasons
+                res["deep"].append({"url": url, "reasons": reasons, "ok": bool(card)})
             # сверка фида с полкой: checks_n карточек из фида, кандидатов с запасом; страниц — не больше 2×checks_n
             tries = 0
             for key, url, code in checks:
@@ -332,6 +416,7 @@ class Visitor:
                 if it:
                     it["check_key"] = key
                     res["checks"].append(it)
+                    got |= {v for v in (it.get("code"), it.get("url")) if v}
         except Stop as e:
             res["stopped"] = str(e)
             res["failed"] = e.failed
@@ -381,5 +466,6 @@ class Visitor:
         it = dict(pick[0])
         it["url"] = it.get("url") or url
         it["code"] = it.get("code") or want
+        it["params"] = {**extract.page_params(page), **(it.get("params") or {})}  # характеристики — для фасовки
         res["via"].add(it["via"])
         return it

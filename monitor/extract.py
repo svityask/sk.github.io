@@ -61,7 +61,26 @@ PAGE_SCRIPT = r"""
       }
     }
     const avail = /нет в наличии|под заказ|закончил/i.test(found.innerText) ? false : null;
-    out.cards.push({url: href, name, price: prices[0] || null, old_price: old, available: avail});
+    const from = /(^|[\s(])от\s*\d/i.test(found.innerText);  // «от 450 ₽» — цена за самую дешёвую фасовку
+    out.cards.push({url: href, name, price: prices[0] || null, old_price: old, available: avail, from});
+  }
+  // характеристики на карточке товара: «Вес, кг — 30», «Фасовка — 25 кг» (для фасовки и вида товара)
+  out.specs = {};
+  const addSpec = (k, v) => {
+    k = (k || '').replace(/\s+/g, ' ').trim().replace(/[:：]$/, ''); v = (v || '').replace(/\s+/g, ' ').trim();
+    if (k && v && k.length <= 80 && v.length <= 120 && Object.keys(out.specs).length < 80 && !(k in out.specs)) out.specs[k] = v;
+  };
+  for (const dt of document.querySelectorAll('dt')) {
+    const dd = dt.nextElementSibling;
+    if (dd && dd.tagName === 'DD') addSpec(dt.innerText, dd.innerText);
+  }
+  for (const tr of document.querySelectorAll('table tr')) {
+    const c = tr.querySelectorAll('th, td');
+    if (c.length === 2) addSpec(c[0].innerText, c[1].innerText);
+  }
+  for (const p of document.querySelectorAll('[itemprop="additionalProperty"]')) {
+    const n = p.querySelector('[itemprop="name"]'), v = p.querySelector('[itemprop="value"]');
+    if (n && v) addSpec(n.innerText || n.getAttribute('content'), v.innerText || v.getAttribute('content'));
   }
   // город в шапке
   const citySel = ['[data-qa*="region"]', '[data-testid*="region"]', '[data-test*="city"]', '[class*="region"]',
@@ -197,6 +216,19 @@ def _price_from(value):
     return None, None
 
 
+_FROM_KEYS = re.compile(r"price_?from|from_?price|min_?price|price_?min|lowprice", re.I)
+
+
+def _price_is_from(obj):
+    """Цена «от …»: в данных лежит минимальная цена, а не цена одной фасовки."""
+    for k, v in obj.items():
+        if _FROM_KEYS.fullmatch(k.replace("-", "_")) and v not in (None, "", 0, False):
+            return True
+        if k.lower() in ("pricetype", "price_type", "pricekind") and isinstance(v, str) and "from" in v.lower():
+            return True
+    return False
+
+
 def _find_price(obj):
     shelf = old = None
     for k, v in obj.items():
@@ -298,6 +330,7 @@ def find_products(data, site, base_url, via):
                                 "available": _availability(o),
                                 "via": via,
                                 "vendor": _brand(o),
+                                "price_from": _price_is_from(o),
                             }
                         )
             for v in o.values():
@@ -315,6 +348,25 @@ def _brand(o):
     if isinstance(b, dict):
         b = b.get("name") or b.get("title")
     return b.strip() if isinstance(b, str) else ""
+
+
+def _jsonld_params(it):
+    """Характеристики из разметки schema.org: additionalProperty и weight → {название: (значение, единица)}."""
+    out = {}
+    props = it.get("additionalProperty")
+    for p in props if isinstance(props, list) else [props] if isinstance(props, dict) else []:
+        if isinstance(p, dict) and p.get("name") and p.get("value") not in (None, ""):
+            out[str(p["name"]).strip()] = (str(p["value"]).strip(), str(p.get("unitText") or "").strip())
+    w = it.get("weight")
+    if isinstance(w, dict) and w.get("value") not in (None, ""):
+        unit = {"KGM": "кг", "GRM": "г", "LTR": "л", "MLT": "мл"}.get(str(w.get("unitCode") or "").upper(), "")
+        out.setdefault("Вес", (str(w["value"]), unit or str(w.get("unitText") or "")))
+    return out
+
+
+def page_params(page):
+    """Характеристики со страницы карточки (таблица, список «название — значение») в формате фида."""
+    return {k: (v, "") for k, v in ((page or {}).get("specs") or {}).items() if isinstance(v, str)}
 
 
 def _from_jsonld(blocks, site, base_url):
@@ -351,6 +403,8 @@ def _from_jsonld(blocks, site, base_url):
                                 "available": _availability(offers),
                                 "via": "разметка",
                                 "vendor": _brand(it),
+                                "params": _jsonld_params(it),
+                                "price_from": "lowPrice" in offers and not offers.get("price"),
                             }
                         )
     return out
@@ -388,6 +442,7 @@ def products_from_page(page, network_json, site):
                 "available": c.get("available"),
                 "via": "вёрстка",
                 "vendor": "",
+                "price_from": bool(c.get("from")),
             }
         )
     layers.append(cards)
@@ -401,8 +456,8 @@ def products_from_page(page, network_json, site):
                 continue
             if k in merged:
                 cur = merged[k]
-                for f in ("url", "old_price", "vendor", "available"):  # дополняем, не перезаписываем
-                    if cur.get(f) in (None, "") and p.get(f) not in (None, ""):
+                for f in ("url", "old_price", "vendor", "available", "params"):  # дополняем, не перезаписываем
+                    if cur.get(f) in (None, "", {}) and p.get(f) not in (None, "", {}):
                         cur[f] = p[f]
                 continue
             merged[k] = dict(p)

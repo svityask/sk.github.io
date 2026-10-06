@@ -18,9 +18,9 @@ import traceback
 import uuid
 from typing import Any
 
-from . import analysis, backup, cdp, config, db, dumps, extract, feeds, guard, kinds, log, report, sites, units
+from . import analysis, backup, cdp, config, db, dumps, extract, feeds, guard, kinds, log, match, report, sites, units
 from .metrics import Meter
-from .visitor import Visitor
+from .visitor import Stop, Visitor
 
 LOCK = "collect"
 HEARTBEAT_S = 30
@@ -252,14 +252,26 @@ class Collector:
                 )
         edge_city, feed_city = conf.get("edge_city") or "", conf.get("feed_city") or ""
         checks = _pick_checks(found, self.settings, self.run_id) if feed_ok and conf.get("edge_enabled") else []
+        prepare = self.interactive and conf.get("edge_prepare", True)  # город выберет человек в окне
         if (sections or gaps or checks) and conf.get("edge_enabled"):
-            if feed_ok and feed_city and edge_city and not extract.same_city(feed_city, edge_city):
+            if not prepare and feed_ok and feed_city and edge_city and not extract.same_city(feed_city, edge_city):
                 self.warn(
                     f"{title}: город фида ({feed_city}) и окна Edge ({edge_city}) разные — "
                     f"дособирать с сайта не стали, чтобы не смешать цены"
                 )
             else:
-                self._edge(site, info, sections, gaps, checks, edge_city or feed_city, found, prod_by_key)
+                self._edge(
+                    site,
+                    info,
+                    sections,
+                    gaps,
+                    checks,
+                    edge_city or feed_city,
+                    found,
+                    prod_by_key,
+                    prepare=prepare,
+                    feed_city=feed_city if feed_ok else "",
+                )
         elif gaps and feed_ok:
             for _gid, url, code in gaps:
                 k = sites.product_key(site, code=code, url=url)
@@ -334,6 +346,7 @@ class Collector:
                 "format": feed.format,
                 "age_h": round(age_h, 1),
                 "categories": len(feed.categories),
+                "tracker_links": feed.tracker_links,
             }
             m.prices = len(found)
             log.info(
@@ -347,6 +360,13 @@ class Collector:
             if age_h > float(self.settings["review"].get("feed_age_h") or 36):
                 self.warn(
                     f"{title}: фиду {age_h:.0f} ч — сеть давно его не обновляла, цены могут отставать", "feed.old"
+                )
+            if feed.total and feed.tracker_links > feed.total / 2:
+                self.warn(
+                    f"{title}: ссылки в фиде не ведут на сайт сети ({feed.tracker_links} из {feed.total}) — "
+                    f"товары из списка по ссылке не найдутся, сверка с сайтом не проводится. "
+                    f"Возьмите в кабинете партнёрской сети ссылку на фид с прямыми адресами товаров",
+                    "feed.tracker_links",
                 )
             if cat_entries and not feed.offers:
                 m.empty += 1
@@ -373,7 +393,39 @@ class Collector:
 
     # ------------------------------------------------------------ 2. сайт
 
-    def _edge(self, site, info, sections, gaps, checks, expect_city, found, prod_by_key):
+    def _remember_city(self, site, city):
+        """Город, выбранный человеком в окне, становится городом окна сбора и для сборов по расписанию."""
+        conf = self.settings["sites"][site]
+        if conf.get("edge_city") == city:
+            return
+        conf["edge_city"] = city
+        try:
+            s = config.load()
+            s["sites"][site]["edge_city"] = city
+            config.save(s)
+            log.info("window.city_saved", f"Город окна сбора: {city}", city=city)
+        except OSError as e:
+            log.warning("window.city_not_saved", f"Город окна сбора не сохранился: {e}")
+
+    def _deep_picker(self, index, stats):
+        """deep(items) для окна: сопоставляет товары с полки с фидом и решает, какие карточки открыть."""
+        warn_pct = float(self.settings.get("crosscheck", {}).get("warn_pct") or 10)
+
+        def deep(items):
+            targets = []
+            for it in items:
+                key, how = index.match(it)
+                it["match_key"], it["match_how"] = key, how
+                reasons = match.deep_reasons(it, index.items.get(key) if key else None, warn_pct, self.brand)
+                if reasons:
+                    targets.append((it, reasons))
+                    for r in reasons:
+                        stats["wanted"][r] = stats["wanted"].get(r, 0) + 1
+            return match.order(targets, self.brand)
+
+        return deep
+
+    def _edge(self, site, info, sections, gaps, checks, expect_city, found, prod_by_key, prepare=False, feed_city=""):
         con, title = self.con, sites.SITES[site]["title"]
         allowed, b = guard.allow(con, site, "edge")
         if not allowed:
@@ -388,6 +440,29 @@ class Collector:
                 self.status.set("Открываю окно Edge для сбора")
                 self.visitor = Visitor(self.settings, self.status, self.interactive)
                 self.visitor.open()
+            if prepare:
+                self.status.set(f"{title}: жду, пока вы подготовите окно сбора")
+                try:
+                    city = self.visitor.prepare(site, feed_city)
+                except Stop as e:
+                    m.finish("skipped")
+                    info["edge"] = {"error": str(e)}
+                    self.warn(f"{title} (сайт): {e}", "edge.not_prepared")
+                    return
+                if city:
+                    expect_city = city
+                    self._remember_city(site, city)
+                    if feed_city and not extract.same_city(feed_city, city):
+                        m.finish("skipped")
+                        info["edge"] = {"error": f"в окне выбран город «{city}», а фид — для «{feed_city}»"}
+                        self.warn(
+                            f"{title}: в окне выбран город «{city}», а цены фида — для «{feed_city}». "
+                            f"С сайта не собирали, чтобы не смешать цены двух городов",
+                            "edge.city_mismatch",
+                        )
+                        return
+            index = match.FeedIndex(site, found)
+            strategy: dict[str, Any] = {"wanted": {}}
             res = self.visitor.run_site(
                 site,
                 sections,
@@ -396,6 +471,7 @@ class Collector:
                 checks=checks,
                 checks_n=int(self.settings.get("crosscheck", {}).get("n") or 0),
                 meter=m,
+                deep=self._deep_picker(index, strategy),
             )
         except cdp.BrowserError as e:  # окно не открылось или его закрыли — это не сбой сайта
             m.errors += 1
@@ -442,16 +518,55 @@ class Collector:
             k = it["check_key"]
             if it.get("price") and k in found and found[k].get("source") == "feed":
                 self.pairs.append((site, k, found[k]["price"], it["price"]))
+        matched: dict[str, int] = {}
+        from_left = 0
         for it in res["items"]:
             if not it.get("price"):
                 continue
-            key = sites.product_key(site, code=it.get("code"), url=it.get("url"))
-            if key in found and found[key].get("source") == "feed":
-                self.pairs.append((site, key, found[key]["price"], it["price"]))  # сверка бесплатно
-            if not key or key in found:
+            if it.get("price_from"):  # «от …» без карточки — не цена товара: ни в сверку, ни в цены
+                from_left += 1
+                continue
+            key, how = it.get("match_key"), it.get("match_how")
+            if it.get("deep") or not key:  # после карточки название и артикул полнее — сопоставляем заново
+                again = index.match(it)
+                if again[0]:
+                    key, how = again
+            if key:
+                matched[how] = matched.get(how, 0) + 1
+                feed_item = found[key]
+                self.pairs.append((site, key, feed_item["price"], it["price"]))  # полка против фида — бесплатно
+                if it.get("params") and not match.pack(feed_item.get("name"), feed_item.get("params"))[0]:
+                    feed_item["params"] = {**(feed_item.get("params") or {}), **it["params"]}  # фасовка с карточки
                 continue  # фид главнее
-            it.update(key=key, source="edge", city=res["city"] or expect_city or None, category_id=None, params={})
+            key = sites.product_key(site, code=it.get("code"), url=it.get("url"))
+            if not key or key in found:
+                continue
+            it.update(
+                key=key,
+                source="edge",
+                city=res["city"] or expect_city or None,
+                category_id=None,
+                params=it.get("params") or {},
+            )
             found[key] = it
+        deep_done: dict[str, int] = {}
+        for d in res["deep"]:
+            for r in d["reasons"]:
+                deep_done[r] = deep_done.get(r, 0) + 1
+        info["edge"]["strategy"] = {
+            "shallow": res["shallow"],
+            "matched": matched,
+            "wanted": strategy["wanted"],
+            "deep": deep_done,
+            "deep_pages": len(res["deep"]),
+            "price_from_left": from_left,
+        }
+        if from_left:
+            self.warn(
+                f"{title} (сайт): у {from_left} товаров в выдаче цена «от …», а карточки не открыли (лимит страниц) — "
+                f"эти цены не записаны",
+                "edge.price_from_left",
+            )
         if not res["stopped"]:
             for _gid, url, code in gaps:
                 k = sites.product_key(site, code=code, url=url)
@@ -624,7 +739,18 @@ class Collector:
             self._log_result()
             return s
         self.status.set("Готовлю отчёт Excel")
-        s["report"] = report.build(self.settings, con, self.run_id, products, market, review, stats, s, self.groups)
+        try:
+            s["report"] = report.build(self.settings, con, self.run_id, products, market, review, stats, s, self.groups)
+        except (sqlite3.DatabaseError, MemoryError):
+            raise
+        except Exception as e:  # цены уже записаны: без отчёта сбор всё равно удачный, отчёт можно сделать заново
+            s["report"] = None
+            self.warn(
+                f"Отчёт Excel не сохранился ({e.__class__.__name__}: {e}) — цены записаны, "
+                f"они видны в приложении; отчёт появится после следующего сбора",
+                "report.failed",
+                trace=traceback.format_exc()[-3000:],
+            )
         s["seconds"] = round(time.time() - self.started)
         db.finish_run(con, self.run_id, "готово", s)
         self.status.set(f"Готово: {len(products)} цен, изменений {len(s['changes'])}, на проверку {len(review)}")

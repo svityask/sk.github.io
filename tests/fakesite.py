@@ -8,6 +8,9 @@
   /catalogue/limit/         — 429 с Retry-After
   /catalogue/captcha/       — 403 «подтвердите, что вы не робот» (не уходит сама)
   /catalogue/check/         — проверка браузера, которая проходит сама через 6 с (Edge на CI открывает страницу дольше 3 с)
+  /                         — главная с городом в шапке (окно готовит человек)
+  /catalogue/smesi/         — выдача для стратегии «полка → карточки»: совпадает с фидом, расходится с фидом,
+                              цена «от», без фасовки, без артикула в ссылке; карточки — /product/… из CARDS
 """
 
 from __future__ import annotations
@@ -86,6 +89,42 @@ CAPTCHA = """<!doctype html><html><head><meta charset="utf-8"><title>Прове�
 <h2>Подтвердите, что вы не робот</h2><div style="width:300px;height:80px;border:2px solid #999">[ капча ]</div></body></html>"""
 
 
+SMESI = [  # (адрес, название в выдаче, цена в выдаче)
+    ("/product/kley-osnovit-pliteks-11111111/", "Клей плиточный Основит Плитэкс C1 25 кг", "400 ₽"),
+    ("/product/kley-cerezit-cm11-22222222/", "Клей плиточный Церезит CM11 25 кг", "520 ₽"),
+    ("/product/kley-volma-keramik-33333333/", "Клей плиточный Волма Керамик", "от 300 ₽"),
+    ("/product/grunt-unis-44444444/", "Грунтовка глубокого проникновения Юнис", "250 ₽"),
+    ("/product/shtukaturka-osnovit-bez-koda/", "Штукатурка гипсовая Основит Гипсвелл PC21 G 30 кг", "590 ₽"),
+]
+
+CARDS = {  # карточки: название, цена, характеристики
+    "/product/kley-cerezit-cm11-22222222/": ("Клей плиточный Церезит CM11 25 кг", 520, {}),
+    "/product/kley-volma-keramik-33333333/": ("Клей плиточный Волма Керамик 25 кг", 310, {"Вес, кг": "25"}),
+    "/product/grunt-unis-44444444/": ("Грунтовка глубокого проникновения Юнис", 250, {"Объём, л": "10"}),
+}
+
+
+def _smesi(city):
+    cards = "".join(
+        f'<div class="card"><a href="{u}">{n}</a><div><span class="price">{p}</span></div></div>' for u, n, p in SMESI
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Смеси — Лемана ПРО</title></head><body>
+{_head(city)}{cards}</body></html>"""
+
+
+def _card(path, city):
+    name, price, specs = CARDS[path]
+    code = path.rstrip("/").rsplit("-", 1)[-1]
+    rows = "".join(f"<tr><th>{k}</th><td>{v}</td></tr>" for k, v in specs.items())
+    ld = json.dumps(
+        {"@type": "Product", "name": name, "sku": code, "offers": {"@type": "Offer", "price": str(price)}},
+        ensure_ascii=False,
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>{name}</title>
+<script type="application/ld+json">{ld}</script></head><body>{_head(city)}<h1>{name}</h1><span>{price} ₽</span>
+<table>{rows}</table></body></html>"""
+
+
 class FakeSite:
     def __init__(self, city="Москва"):
         self.city = city
@@ -119,6 +158,12 @@ class FakeSite:
                     return self.send(json.dumps(API[page], ensure_ascii=False), "application/json")
                 if p == "/catalogue/shtukaturki/":
                     return self.send(_section(int(q.get("page", ["1"])[0]), outer.city))
+                if p == "/":
+                    return self.send(f"<!doctype html><title>Лемана ПРО</title>{_head(outer.city)}<h1>Главная</h1>")
+                if p == "/catalogue/smesi/":
+                    return self.send(_smesi(outer.city))
+                if p in CARDS:
+                    return self.send(_card(p, outer.city))
                 if p.startswith("/product/shpaklevka"):
                     return self.send(PRODUCT.replace("HEAD", _head(outer.city)))
                 if p == "/catalogue/check/":
