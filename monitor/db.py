@@ -175,6 +175,12 @@ CREATE TABLE IF NOT EXISTS kv(              -- мелкие значения: т
 );
 """,
     ),
+    (
+        5,
+        """
+ALTER TABLE products ADD COLUMN found_by TEXT NOT NULL DEFAULT 'tracked';  -- tracked / auto (автопоиск аналогов)
+""",
+    ),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
@@ -396,8 +402,8 @@ def record(con, run_id, item, ts=None):
     if row is None:
         con.execute(
             """INSERT INTO products(key,site,code,name,url,vendor,category_id,group_id,pack_qty,pack_unit,is_ours,
-               first_seen,last_seen,last_run,price,old_price,available,source,city)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               first_seen,last_seen,last_run,price,old_price,available,source,city,found_by)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 item["key"],
                 item["site"],
@@ -418,6 +424,7 @@ def record(con, run_id, item, ts=None):
                 avail,
                 item["source"],
                 item.get("city"),
+                item.get("found_by") or "tracked",
             ),
         )
     else:
@@ -426,7 +433,8 @@ def record(con, run_id, item, ts=None):
         con.execute(
             """UPDATE products SET code=?, name=?, url=?, vendor=?, category_id=COALESCE(?,category_id),
                group_id=COALESCE(?,group_id), pack_qty=?, pack_unit=?, is_ours=?, last_seen=?, last_run=?,
-               price=?, old_price=?, available=?, source=?, city=?, prev_price=?, prev_source=? WHERE key=?""",
+               price=?, old_price=?, available=?, source=?, city=?, prev_price=?, prev_source=?, found_by=?
+               WHERE key=?""",
             (
                 item.get("code") or row["code"],
                 item.get("name") or row["name"],
@@ -446,6 +454,7 @@ def record(con, run_id, item, ts=None):
                 item.get("city"),
                 prev_price,
                 prev_source,
+                item.get("found_by") or "tracked",
                 item["key"],
             ),
         )

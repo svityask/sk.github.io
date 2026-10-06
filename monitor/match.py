@@ -69,13 +69,21 @@ class FeedIndex:
 
     def match(self, item: dict[str, Any]) -> tuple[str | None, str | None]:
         """(ключ товара фида, как сопоставили) или (None, None)."""
-        key = sites.product_key(self.site, code=item.get("code"), url=item.get("url"))
+        code = item.get("code") or sites.code_from_url(item.get("url") or "")
+        key = sites.product_key(self.site, code=code, url=item.get("url"))
         if key and key in self.items:
             return key, "артикул"
         t = tokens(item.get("name"))
         if not t:
             return None, None
-        same = self.by_tokens.get(t) or []
+
+        def comparable(k):
+            # У товара на полке свой артикул, а у товара фида — адрес на сайте с другим артикулом: это разные
+            # товары с похожим названием (другой цвет, другая партия). По названию сопоставляем, только если
+            # артикул сравнить нельзя: его нет на полке или в фиде нет адреса товара (ключ по id предложения).
+            return not code or not self.items[k].get("url")
+
+        same = [k for k in self.by_tokens.get(t) or [] if comparable(k)]
         if len(same) == 1:
             return same[0], "название"
         if len(t) < self.MIN_WORDS:
@@ -85,7 +93,7 @@ class FeedIndex:
         cands = [
             k
             for k, ft, (fq, fu) in self.entries
-            if t <= ft and (qty is None or (fq is not None and fu == unit and abs(fq - qty) < 1e-6))
+            if t <= ft and comparable(k) and (qty is None or (fq is not None and fu == unit and abs(fq - qty) < 1e-6))
         ]
         if len(cands) == 1:
             return cands[0], "название и фасовка"

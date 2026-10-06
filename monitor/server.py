@@ -40,7 +40,11 @@ class App:
     def __init__(self):
         self.token = secrets.token_urlsafe(16)
         self.settings = config.load()
-        self._local = threading.local()  # своё соединение с базой на каждый поток сервера
+        # Сервер отвечает каждому запросу в своём потоке. Соединение с базой поток берёт из пула на время запроса
+        # и возвращает (release): без пула каждый опрос окна раз в 1,5 с открывал бы базу заново.
+        self._local = threading.local()
+        self._pool: list = []
+        self._pool_lock = threading.Lock()
         self.lock = threading.Lock()
         self.status = collect.Status()
         self.last_ping = time.time()
@@ -55,8 +59,35 @@ class App:
     def con(self):
         c = getattr(self._local, "con", None)
         if c is None:
-            c = self._local.con = db.connect(config.DB_PATH)
+            with self._pool_lock:
+                c = self._pool.pop() if self._pool else None
+            c = self._local.con = c or db.connect(config.DB_PATH)
         return c
+
+    POOL_SIZE = 4
+
+    def release(self):
+        """Конец запроса: соединение потока — обратно в пул (лишние закрываются)."""
+        c = getattr(self._local, "con", None)
+        if c is None:
+            return
+        self._local.con = None
+        if c.in_transaction:  # запрос оборвался посреди транзакции — такое соединение не отдаём
+            c.close()
+            return
+        with self._pool_lock:
+            if len(self._pool) < self.POOL_SIZE:
+                self._pool.append(c)
+                return
+        c.close()
+
+    def close(self):
+        """Закрыть все соединения (окно закрыто, тесты)."""
+        self.release()
+        with self._pool_lock:
+            pool, self._pool = self._pool, []
+        for c in pool:
+            c.close()
 
     # ------------------------------------------------------------ сбор
 
@@ -459,6 +490,10 @@ def make_handler(app):
                     self._send(500, {"error": f"внутренняя ошибка: {e}. Подробности — в журнале"})
                 except OSError:
                     pass
+            finally:
+                release = getattr(app, "release", None)
+                if release:
+                    release()
 
         def do_GET(self):
             self._guarded(self._get)
@@ -476,6 +511,11 @@ def make_handler(app):
                 with open(os.path.join(UI_DIR, "index.html"), encoding="utf-8") as f:
                     html = f.read().replace("__TOKEN__", app.token)
                 return self._send(200, html.encode(), "text/html; charset=utf-8")
+            if u.path == "/favicon.ico":  # значок — в самой странице; браузер всё равно спрашивает этот адрес
+                self.send_response(204)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return None
             if not self._authorized():
                 return self._send(403, {"error": "нет ключа"})
             app.last_ping = time.time()

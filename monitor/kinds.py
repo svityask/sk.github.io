@@ -63,6 +63,16 @@ _BASES_RX = [(label, re.compile(rx)) for label, rx in _BASES]
 _FINISH_RX = [(label, re.compile(rx)) for label, rx in _FINISH]
 
 
+# Быстрый отсев: первое условие каждого вида — его корень («штукатур», «затирк», «клей»…). Название без единого
+# такого корня (инструмент, лампы, обои — большая часть каталога сети) дальше не разбирается.
+_ANY_KIND = re.compile("|".join(f"(?:{conds[0]})" for _label, conds in _TYPES))
+
+
+def maybe_kind(name):
+    """Может ли название оказаться знакомым видом товара (дешёвая проверка перед attrs)."""
+    return bool(_ANY_KIND.search((name or "").lower().replace("ё", "е")))
+
+
 def _find(pairs, text):
     for label, rx in pairs:
         if rx.search(text):

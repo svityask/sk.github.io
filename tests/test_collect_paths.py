@@ -212,6 +212,56 @@ class EdgeWindow(unittest.TestCase):
         self.assertTrue(tab.closed)
 
 
+class PrepareBlocked(unittest.TestCase):
+    def test_429_while_preparing_pauses_the_source(self):
+        """429 ещё при подготовке окна — источник на паузе, как при сборе, а не «ошибка сети»."""
+        from monitor import guard
+
+        data = tmpdir("osnovit-pb-")
+        con = db.connect(os.path.join(data, "m.sqlite"))
+        self.addCleanup(con.close)
+        s = config.load()
+        s["report_dir"] = os.path.join(data, "reports")
+        s["sites"]["petrovich"]["enabled"] = False
+        s["sites"]["lemanapro"].update(feed="", edge_enabled=True, edge_prepare=True)
+        db.add_tracked(con, "lemanapro", "section", "https://lemanapro.ru/catalogue/x/", "Раздел")
+        with (
+            mock.patch.object(Visitor, "open"),
+            mock.patch.object(Visitor, "close"),
+            mock.patch.object(Visitor, "prepare", side_effect=guard.Blocked("429", 7200, "сайт ответил 429")),
+            mock.patch.object(Visitor, "run_site") as run_site,
+        ):
+            r = collect.run(s, collect.Status(), con=con, interactive=True)
+        run_site.assert_not_called()
+        self.assertNotIn("error", r)
+        self.assertNotIn("error", r["sites"]["lemanapro"])  # не «сбой сети»
+        self.assertIn("на паузе", r["sites"]["lemanapro"]["edge"]["error"])
+        b = next(x for x in guard.states(con) if x["source"] == "edge")
+        self.assertEqual(b["state"], "open")
+
+
+class CancelIsNotDone(unittest.TestCase):
+    def test_cancel_while_waiting_for_human(self):
+        st = collect.Status()
+        threading.Timer(0.2, st.cancel).start()
+        self.assertFalse(st.ask_human("Пройдите проверку", lambda: False, 30))
+        st = collect.Status()
+        threading.Timer(0.2, st.human_done).start()
+        self.assertTrue(st.ask_human("Пройдите проверку", lambda: False, 30))
+
+    def test_cancel_during_prepare_is_a_stop_not_a_city(self):
+        v = Visitor(config.load(), collect.Status(), interactive=True)
+        v._tab = mock.Mock()
+        v.allowed = mock.Mock(return_value=False)
+        v.status.cancel()
+        from monitor.visitor import Stop
+
+        with self.assertRaises(Stop) as cm:
+            v.prepare("lemanapro")
+        self.assertIn("остановлен", str(cm.exception))
+        v._tab.evaluate.assert_not_called()  # город с недоготовленной страницы не читали
+
+
 class ReportFile(unittest.TestCase):
     def sheets(self):
         sh = xlsx.Sheet("Лист", [("A", 10, xlsx.TEXT)])
