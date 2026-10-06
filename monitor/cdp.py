@@ -23,6 +23,9 @@ class BrowserError(Exception):
     pass
 
 
+FRAME_TIMEOUT = 30.0  # сколько ждать продолжения уже начатого сообщения
+
+
 # ---------------------------------------------------------------- WebSocket (RFC 6455, только клиент)
 
 
@@ -47,15 +50,20 @@ class WebSocket:
         status_line = head.split(b"\r\n", 1)[0]
         if b" 101 " not in status_line:
             raise BrowserError(f"Браузер не принял подключение: {status_line.decode(errors='replace')}")
-        self.buf = head.split(b"\r\n\r\n", 1)[1]
+        self.buf = bytearray(head.split(b"\r\n\r\n", 1)[1])
 
-    def _read(self, n):
+    def _fill(self, n):
+        """Дочитывает из сокета, пока в буфере не будет n байт (ничего не забирая из него)."""
         while len(self.buf) < n:
             chunk = self.sock.recv(max(65536, n - len(self.buf)))
             if not chunk:
                 raise BrowserError("Окно браузера закрыто")
-            self.buf += chunk
-        out, self.buf = self.buf[:n], self.buf[n:]
+            self.buf += chunk  # bytearray: большой ответ (HTML страницы) не копируется на каждом куске
+
+    def _read(self, n):
+        self._fill(n)
+        out = bytes(self.buf[:n])
+        del self.buf[:n]
         return out
 
     def send(self, text):
@@ -83,37 +91,46 @@ class WebSocket:
         self.sock.sendall(frame)
 
     def recv(self, timeout=None):
-        """Следующее текстовое сообщение или None по тайм-ауту."""
-        self.sock.settimeout(timeout)
-        parts = []
-        try:
-            while True:
+        """Следующее текстовое сообщение или None по тайм-ауту.
+
+        Тайм-аут действует только на ожидание начала сообщения. Начатое сообщение дочитывается целиком
+        (до FRAME_TIMEOUT на кусок): иначе прочитанный заголовок кадра терялся бы, и следующий recv принял бы
+        середину большого ответа (HTML страницы, тело XHR) за новый кадр.
+        """
+        parts: list[bytes] = []
+        while True:
+            self.sock.settimeout(timeout if not parts else max(FRAME_TIMEOUT, timeout or 0))
+            if not self.buf:
+                try:
+                    self._fill(1)  # ждём первый байт; он остаётся в буфере
+                except TimeoutError:
+                    if not parts:
+                        return None
+                    raise BrowserError("Браузер оборвал сообщение на середине") from None
+            self.sock.settimeout(max(FRAME_TIMEOUT, timeout or 0))  # кадр начат — дочитываем его
+            try:
                 b1, b2 = self._read(2)
-                fin, opcode = b1 & 0x80, b1 & 0x0F
                 n = b2 & 0x7F
                 if n == 126:
                     n = struct.unpack(">H", self._read(2))[0]
                 elif n == 127:
                     n = struct.unpack(">Q", self._read(8))[0]
-                if b2 & 0x80:
-                    mask = self._read(4)
-                    payload = bytes(b ^ mask[i % 4] for i, b in enumerate(self._read(n)))
-                else:
-                    payload = self._read(n)
-                if opcode == 0x9:
-                    self._send_control(0xA, payload)
-                    continue
-                if opcode == 0x8:
-                    raise BrowserError("Окно браузера закрыто")
-                if opcode in (0x1, 0x2, 0x0):
-                    parts.append(payload)
-                    if fin:
-                        return b"".join(parts).decode("utf-8", "replace")
-        except TimeoutError:
-            if parts:  # недочитанное сообщение — дочитываем без тайм-аута
-                self.sock.settimeout(30)
-                return self.recv(30)
-            return None
+                mask = self._read(4) if b2 & 0x80 else b""
+                payload = self._read(n)
+            except TimeoutError:
+                raise BrowserError("Браузер не дослал сообщение") from None
+            if mask:
+                payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+            fin, opcode = b1 & 0x80, b1 & 0x0F
+            if opcode == 0x9:
+                self._send_control(0xA, payload)
+                continue
+            if opcode == 0x8:
+                raise BrowserError("Окно браузера закрыто")
+            if opcode in (0x1, 0x2, 0x0):
+                parts.append(payload)
+                if fin:
+                    return b"".join(parts).decode("utf-8", "replace")
 
     def close(self):
         try:
@@ -148,6 +165,15 @@ def find_browser(custom=""):
         if p:
             return p
     return None
+
+
+def _loads(msg):
+    """Сообщение DevTools → dict; испорченное сообщение не роняет сбор, а пропускается."""
+    try:
+        data = json.loads(msg)
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _json_http(url, method="GET", timeout=5):
@@ -226,7 +252,7 @@ class Tab:
             msg = self.ws.recv(timeout=max(0.1, deadline - time.time()))
             if msg is None:
                 continue
-            data = json.loads(msg)
+            data = _loads(msg)
             if data.get("id") == my:
                 if "error" in data:
                     raise BrowserError(f"{method}: {data['error'].get('message')}")
@@ -241,7 +267,7 @@ class Tab:
         while time.time() < deadline:
             msg = self.ws.recv(timeout=max(0.05, deadline - time.time()))
             if msg:
-                data = json.loads(msg)
+                data = _loads(msg)
                 if "method" in data:
                     self.events.append(data)
 

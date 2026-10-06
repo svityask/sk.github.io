@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
@@ -415,7 +416,30 @@ def make_handler(app):
         def _authorized(self):
             return secrets.compare_digest(self.headers.get("X-Token", ""), app.token)
 
+        def _guarded(self, handle):
+            """Неожиданная ошибка — ответ 500 с понятным текстом и запись в журнал, а не оборванное соединение."""
+            try:
+                handle()
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # окно закрыли, не дождавшись ответа
+            except Exception as e:
+                log.error(
+                    "ui.error",
+                    f"Ошибка обработки {self.command} {urlsplit(self.path).path}: {e.__class__.__name__}: {e}",
+                    trace=traceback.format_exc()[-3000:],
+                )
+                try:
+                    self._send(500, {"error": f"внутренняя ошибка: {e}. Подробности — в журнале"})
+                except OSError:
+                    pass
+
         def do_GET(self):
+            self._guarded(self._get)
+
+        def do_POST(self):
+            self._guarded(self._post)
+
+        def _get(self):
             u = urlsplit(self.path)
             if u.path == "/":
                 if parse_qs(u.query).get("t", [""])[0] != app.token:
@@ -452,7 +476,7 @@ def make_handler(app):
                 return self._send(200, spot.view(app.con, config.load()))
             return self._send(404, {"error": "нет такого адреса"})
 
-        def do_POST(self):
+        def _post(self):
             if not self._authorized():
                 return self._send(403, {"error": "нет ключа"})
             app.last_ping = time.time()

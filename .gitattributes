@@ -1,0 +1,6 @@
+# Запустить.cmd должен оставаться с CRLF, иначе cmd.exe путает строки с кириллицей
+*.cmd text eol=crlf
+*.py  text eol=lf
+*.html text eol=lf
+*.md  text eol=lf
+tests/fixtures/** -text

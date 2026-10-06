@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install ruff mypy
+      - run: ruff check --output-format=github .
+      - run: ruff format --check .
+      - run: mypy
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.12"]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Офлайн-тесты
+        run: python -m unittest discover -s tests -v
+
+  browser:
+    # окно сбора в настоящем браузере на поддельном сайте
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            experimental: false
+          - os: windows-latest
+            experimental: true
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: browser-actions/setup-chrome@v2
+        if: runner.os == 'Linux'
+        id: chrome
+      - name: Браузер (Linux)
+        if: runner.os == 'Linux'
+        run: echo "OSNOVIT_BROWSER=${{ steps.chrome.outputs.chrome-path }}" >> "$GITHUB_ENV"
+      - name: Окно сбора
+        run: python -m unittest discover -s tests -p "test_browser.py" -v
+
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: python tools/build.py
+      - uses: actions/upload-artifact@v5
+        with:
+          name: osnovit-diy-zip
+          path: dist/*.zip

@@ -166,7 +166,7 @@ class Collector:
                 for site, conf in self.settings["sites"].items():
                     if conf.get("enabled"):
                         with log.context(site=site):
-                            self._site(site, conf)
+                            self._site_safe(site, conf)
                 self._close_visitor()
                 result = self._analyse_and_report()
                 self._after_success()
@@ -194,6 +194,23 @@ class Collector:
             self.visitor = None
 
     # ------------------------------------------------------------ сеть
+
+    def _site_safe(self, site, conf):
+        """Неожиданная ошибка в одной сети не отменяет сбор по другой: её цены просто не записываются."""
+        try:
+            self._site(site, conf)
+        except (sqlite3.DatabaseError, MemoryError):
+            raise  # с базой или памятью беда — дальше собирать бессмысленно
+        except Exception as e:
+            title = sites.SITES[site]["title"]
+            info = self.summary["sites"].setdefault(site, {"title": title})
+            info["error"] = f"{e.__class__.__name__}: {e}"
+            self._close_visitor()  # окно могло остаться в непонятном состоянии — следующая сеть откроет новое
+            self.warn(
+                f"{title}: сбор по сети прерван ошибкой ({e.__class__.__name__}: {e}) — цены сети не записаны",
+                "site.error",
+                trace=traceback.format_exc()[-3000:],
+            )
 
     def _site(self, site, conf):
         con = self.con
