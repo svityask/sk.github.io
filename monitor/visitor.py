@@ -337,7 +337,9 @@ class Visitor:
 
     # ------------------------------------------------------------ сеть целиком
 
-    def run_site(self, site, sections, products, expect_city="", checks=(), checks_n=0, meter=None, deep=None):
+    def run_site(
+        self, site, sections, products, expect_city="", checks=(), checks_n=0, meter=None, deep=None, searches=()
+    ):
         """sections: [(group_id, url, title)], products: [(group_id, url, code)], checks: [(key, url, code)].
 
         Порядок: shallow — страницы разделов; карточки отслеживаемых товаров, которых нет в выдаче; deep —
@@ -379,6 +381,26 @@ class Visitor:
                     )
                     continue
                 self._section(site, gid, url, sec_title, expect_city, res, title)
+            # поиск аналогов по названиям: выдача поиска сайта — как раздел, но не дальше search_pages страниц
+            for query, url in searches:
+                if not self.allowed(url):
+                    res["notes"].append(
+                        f"Поиск по сайту запрещён robots.txt — «{query}» не искали. "
+                        f"Найдите в Яндексе (кнопка в «Что отслеживаем») и вставьте ссылки"
+                    )
+                    res["skipped"] += 1
+                    break  # robots.txt для всех запросов один — дальше не пробуем
+                self._section(
+                    site,
+                    None,
+                    url,
+                    f"поиск «{query}»",
+                    expect_city,
+                    res,
+                    title,
+                    tag=query,
+                    max_pages=int(self.s.get("search_pages") or 2),
+                )
             res["shallow"] = len(res["items"])
             # пустой артикул или адрес не считается «уже найден» — иначе пропускались бы все карточки без артикула
             got = {v for it in res["items"] for v in (it.get("code"), it.get("url")) if v}
@@ -427,7 +449,7 @@ class Visitor:
         self.meter.prices = len(res["items"]) + len(res["checks"])
         return res
 
-    def _section(self, site, gid, url, sec_title, expect_city, res, title):
+    def _section(self, site, gid, url, sec_title, expect_city, res, title, tag=None, max_pages=None):
         """Раздел целиком: страница за страницей до конца выдачи (лимит страниц на раздел и на сбор — общие).
 
         Следующая страница: ссылка (rel="next", «Дальше», номер текущей + 1) — переходим по ней;
@@ -435,7 +457,7 @@ class Visitor:
         """
         visited: set[str] = set()
         seen: set[str] = set()
-        max_pages = int(self.s.get("max_section_pages") or 30)
+        max_pages = max_pages or int(self.s.get("max_section_pages") or 30)
         n = 0
 
         def take(items):
@@ -443,6 +465,8 @@ class Visitor:
             for it in new:
                 seen.add(it.get("code") or it.get("url"))
                 it["group_id"] = gid
+                if tag:
+                    it["search"] = tag  # нашёлся поиском по этому запросу
             res["items"].extend(new)
             return new
 

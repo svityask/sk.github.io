@@ -301,6 +301,12 @@ table.tight td, table.tight th { padding: 5px 6px; font-size: 12.5px; }
   </div>
 
   <div class="card">
+    <h2>Поиск аналогов по названиям <span class="muted small">— запросы составляются сами из товаров Основит</span></h2>
+    <div class="muted small">Каждый сбор приложение ищет на сайте сети несколько запросов по кругу и берёт товары того же вида с понятной фасовкой. Если поиск сайта закрыт в robots.txt — откройте запрос в Яндексе, скопируйте ссылки на товары и вставьте их в поле «Ссылки» выше.</div>
+    <div id="queries" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
     <h2>Ваши решения <span class="muted small">— «Не конкурент» и «Всё верно»; любое можно вернуть</span></h2>
     <div id="decisions"></div>
   </div>
@@ -321,6 +327,10 @@ table.tight td, table.tight th { padding: 5px 6px; font-size: 12.5px; }
         <div class="muted small">Не только в отслеживаемых категориях: все товары Основит и товары конкурентов того же вида (штукатурки, затирки, шпаклёвки, клеи, наливные полы…) с понятной фасовкой. Ищется по уже скачанному фиду — к сайту лишних заходов нет.</div>
         <label class="f">Аналогов на один вид товара</label>
         <input type="number" id="auto-max" min="5" max="300" step="5">
+        <label class="check" style="margin-top:12px"><input type="checkbox" id="site-search"> Искать аналоги и поиском на сайте сети (окно Edge)</label>
+        <div class="muted small">По названиям: «Штукатурка гипсовая 30 кг» и т. п. — запросы составляются сами. Тот же лимит страниц, паузы и robots.txt.</div>
+        <label class="f">Свои запросы поиска, по одному в строке</label>
+        <textarea id="own-queries" rows="3" placeholder="Кнауф Ротбанд 30 кг&#10;затирка эпоксидная"></textarea>
         <label class="f">Папка для отчётов</label>
         <input type="text" id="report-dir" placeholder="Документы\Монитор Основит DIY">
       </div>
@@ -969,6 +979,18 @@ function renderTracked() {
     if (!confirm("Перестать отслеживать?")) return;
     await api("/api/untrack", {id: +b.dataset.id}); refresh();
   });
+  renderQueries();
+}
+async function renderQueries() {
+  const site = trackSite;
+  const r = await api(`/api/queries?site=${site}`);
+  if (site !== trackSite || !r.queries) return;
+  $("queries").innerHTML = r.queries.length ? r.queries.map(q => `<div class="list-item">
+      <div class="grow ellipsis">${esc(q.text)}</div>
+      <a class="small" href="${esc(q.yandex_url)}" target="_blank">Найти в Яндексе</a>
+      ${q.site_url ? `<a class="small muted" href="${esc(q.site_url)}" target="_blank">поиск на сайте</a>` : ""}</div>`).join("") +
+      (r.site_search ? `<div class="muted small" style="margin-top:6px">За сбор — ${r.per_run} запроса по кругу.</div>` : `<div class="muted small" style="margin-top:6px">Поиск на сайте выключен в настройках — работают только кнопки «Найти в Яндексе».</div>`)
+    : `<div class="empty">Запросы появятся, когда в сборе найдутся товары Основит с понятным видом.</div>`;
 }
 
 // ------------------------------------------------------------ настройки
@@ -996,6 +1018,7 @@ function renderSettings() {
     </div>`).join("");
   $("brand").value = (s.brand_words || []).join(", ");
   $("auto-analogs").checked = s.analogs.auto !== false; $("auto-max").value = s.analogs.max_per_kind || 40;
+  $("site-search").checked = s.analogs.site_search !== false; $("own-queries").value = (s.analogs.queries || []).join("\n");
   $("report-dir").value = s.report_dir || "";
   $("pause").value = s.edge.pause_s; $("maxpages").value = s.edge.max_pages; $("maxsec").value = s.edge.max_section_pages;
   $("ccn").value = s.crosscheck.n; $("edge-path").value = s.edge.path || "";
@@ -1017,6 +1040,8 @@ function collectSettings() {
   });
   s.brand_words = $("brand").value.split(",").map(x => x.trim()).filter(Boolean);
   s.analogs.auto = $("auto-analogs").checked; s.analogs.max_per_kind = +$("auto-max").value || 40;
+  s.analogs.site_search = $("site-search").checked;
+  s.analogs.queries = $("own-queries").value.split("\n").map(x => x.trim()).filter(Boolean);
   s.report_dir = $("report-dir").value.trim();
   s.edge.pause_s = +$("pause").value; s.edge.max_pages = +$("maxpages").value; s.edge.max_section_pages = +$("maxsec").value;
   s.crosscheck.n = +$("ccn").value; s.edge.path = $("edge-path").value.trim();

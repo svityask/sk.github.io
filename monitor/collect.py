@@ -151,6 +151,7 @@ class Collector:
         self.pairs: list[tuple[str, str, float, float]] = []  # (сеть, товар, цена фида, цена сайта)
         self.meters: list[Meter] = []
         self.visitor: Visitor | None = None
+        self.queries: dict[str, dict[str, dict]] = {}  # сеть → {текст запроса: запрос} поиска аналогов на сайте
         self._beat = 0.0
 
     # ------------------------------------------------------------ общее
@@ -270,7 +271,8 @@ class Collector:
         edge_city, feed_city = conf.get("edge_city") or "", conf.get("feed_city") or ""
         checks = _pick_checks(found, self.settings, self.run_id) if feed_ok and conf.get("edge_enabled") else []
         prepare = self.interactive and conf.get("edge_prepare", True)  # город выберет человек в окне
-        if (sections or gaps or checks) and conf.get("edge_enabled"):
+        searches = self._searches(site, conf, found) if conf.get("edge_enabled") else []
+        if (sections or gaps or checks or searches) and conf.get("edge_enabled"):
             if not prepare and feed_ok and feed_city and edge_city and not extract.same_city(feed_city, edge_city):
                 self.warn(
                     f"{title}: город фида ({feed_city}) и окна Edge ({edge_city}) разные — "
@@ -288,6 +290,7 @@ class Collector:
                     prod_by_key,
                     prepare=prepare,
                     feed_city=feed_city if feed_ok else "",
+                    searches=searches,
                 )
         elif gaps and feed_ok:
             for _gid, url, code in gaps:
@@ -434,6 +437,22 @@ class Collector:
 
     # ------------------------------------------------------------ 2. сайт
 
+    def _searches(self, site, conf, found):
+        """Запросы поиска аналогов на сайте для этого сбора: [(запрос, адрес)]; сами запросы — в self.queries."""
+        a = self.settings.get("analogs") or {}
+        if not a.get("site_search", True):
+            return []
+        queries = analogs.plan(
+            analogs.site_queries(self.con, self.settings, site, found), self.run_id, int(a.get("search_queries") or 4)
+        )
+        self.queries[site] = {q["text"]: q for q in queries}
+        out = []
+        for q in queries:
+            url = sites.search_url(site, q["text"], conf.get("search_url") or "")
+            if url:
+                out.append((q["text"], url))
+        return out
+
     def _remember_city(self, site, city):
         """Город, выбранный человеком в окне, становится городом окна сбора и для сборов по расписанию."""
         conf = self.settings["sites"][site]
@@ -448,13 +467,17 @@ class Collector:
         except OSError as e:
             log.warning("window.city_not_saved", f"Город окна сбора не сохранился: {e}")
 
-    def _deep_picker(self, index, stats):
+    def _deep_picker(self, index, stats, queries=None):
         """deep(items) для окна: сопоставляет товары с полки с фидом и решает, какие карточки открыть."""
         warn_pct = float(self.settings.get("crosscheck", {}).get("warn_pct") or 10)
+        queries = queries or {}
 
         def deep(items):
             targets = []
             for it in items:
+                q = queries.get(it.get("search") or "")
+                if it.get("search") and (not q or not analogs.fits(it, q, need_pack=False)):
+                    continue  # найдено поиском, но не того вида — карточку не открываем
                 key, how = index.match(it)
                 it["match_key"], it["match_how"] = key, how
                 reasons = match.deep_reasons(it, index.items.get(key) if key else None, warn_pct, self.brand)
@@ -466,7 +489,20 @@ class Collector:
 
         return deep
 
-    def _edge(self, site, info, sections, gaps, checks, expect_city, found, prod_by_key, prepare=False, feed_city=""):
+    def _edge(
+        self,
+        site,
+        info,
+        sections,
+        gaps,
+        checks,
+        expect_city,
+        found,
+        prod_by_key,
+        prepare=False,
+        feed_city="",
+        searches=(),
+    ):
         con, title = self.con, sites.SITES[site]["title"]
         allowed, b = guard.allow(con, site, "edge")
         if not allowed:
@@ -520,7 +556,8 @@ class Collector:
                 checks=checks,
                 checks_n=int(self.settings.get("crosscheck", {}).get("n") or 0),
                 meter=m,
-                deep=self._deep_picker(index, strategy),
+                deep=self._deep_picker(index, strategy, self.queries.get(site) or {}),
+                searches=searches,
             )
         except cdp.BrowserError as e:  # окно не открылось или его закрыли — это не сбой сайта
             m.errors += 1
@@ -569,9 +606,19 @@ class Collector:
                 self.pairs.append((site, k, found[k]["price"], it["price"]))
         matched: dict[str, int] = {}
         from_left = 0
+        queries = self.queries.get(site) or {}
+        searched: dict[str, dict[str, int]] = {}
         for it in res["items"]:
             if not it.get("price"):
                 continue
+            if it.get("search"):  # поиск аналогов: берём только товары того же вида с понятной фасовкой
+                st = searched.setdefault(it["search"], {"found": 0, "kept": 0})
+                st["found"] += 1
+                q = queries.get(it["search"])
+                if not q or not analogs.fits(it, q, need_pack=True):
+                    continue
+                st["kept"] += 1
+                it["found_by"] = analogs.AUTO
             if it.get("price_from"):  # «от …» без карточки — не цена товара: ни в сверку, ни в цены
                 from_left += 1
                 continue
@@ -609,6 +656,7 @@ class Collector:
             "deep": deep_done,
             "deep_pages": len(res["deep"]),
             "price_from_left": from_left,
+            "searched": searched,
         }
         if from_left:
             self.warn(

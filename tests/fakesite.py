@@ -97,10 +97,19 @@ SMESI = [  # (адрес, название в выдаче, цена в выда
     ("/product/shtukaturka-osnovit-bez-koda/", "Штукатурка гипсовая Основит Гипсвелл PC21 G 30 кг", "590 ₽"),
 ]
 
+SEARCH = [  # выдача поиска по сайту (/search/?q=…): аналоги и шум
+    ("/product/knauf-rotband-77700001/", "Штукатурка гипсовая Кнауф Ротбанд 30 кг", "520 ₽"),
+    ("/product/volma-sloy-77700002/", "Штукатурка гипсовая Волма Слой 30 кг", "480 ₽"),
+    ("/product/unis-cement-77700003/", "Штукатурка цементная Юнис 25 кг", "300 ₽"),  # другая основа — не аналог
+    ("/product/shpatel-77700004/", "Шпатель 300 мм", "250 ₽"),  # не смесь
+    ("/product/starateli-77700005/", "Штукатурка гипсовая Старатели", "450 ₽"),  # фасовка — только в карточке
+]
+
 CARDS = {  # карточки: название, цена, характеристики
     "/product/kley-cerezit-cm11-22222222/": ("Клей плиточный Церезит CM11 25 кг", 520, {}),
     "/product/kley-volma-keramik-33333333/": ("Клей плиточный Волма Керамик 25 кг", 310, {"Вес, кг": "25"}),
     "/product/grunt-unis-44444444/": ("Грунтовка глубокого проникновения Юнис", 250, {"Объём, л": "10"}),
+    "/product/starateli-77700005/": ("Штукатурка гипсовая Старатели", 450, {"Вес, кг": "30"}),
 }
 
 
@@ -109,6 +118,14 @@ def _smesi(city):
         f'<div class="card"><a href="{u}">{n}</a><div><span class="price">{p}</span></div></div>' for u, n, p in SMESI
     )
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>Смеси — Лемана ПРО</title></head><body>
+{_head(city)}{cards}</body></html>"""
+
+
+def _search(city):
+    cards = "".join(
+        f'<div class="card"><a href="{u}">{n}</a><div><span class="price">{p}</span></div></div>' for u, n, p in SEARCH
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Поиск — Лемана ПРО</title></head><body>
 {_head(city)}{cards}</body></html>"""
 
 
@@ -207,7 +224,10 @@ class FakeSite:
                     outer.log.append(self.path)
                 p = u.path
                 if p == "/robots.txt":
-                    return self.send("User-agent: *\nDisallow: /catalogue/zapret/\n", "text/plain; charset=utf-8")
+                    return self.send(
+                        "User-agent: *\nDisallow: /catalogue/zapret/\nDisallow: /search-closed/\n",
+                        "text/plain; charset=utf-8",
+                    )
                 if p == "/api/catalog":
                     page = int(q.get("page", ["1"])[0])
                     return self.send(json.dumps(API[page], ensure_ascii=False), "application/json")
@@ -215,6 +235,8 @@ class FakeSite:
                     return self.send(_section(int(q.get("page", ["1"])[0]), outer.city))
                 if p == "/":
                     return self.send(f"<!doctype html><title>Лемана ПРО</title>{_head(outer.city)}<h1>Главная</h1>")
+                if p == "/search/":
+                    return self.send(_search(outer.city))
                 if p == "/catalog/shtukaturki/":
                     return self.send(_petrovich_page(int(q.get("p", ["1"])[0]), outer.city))
                 if p == "/catalogue/pokazat/":
