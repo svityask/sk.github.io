@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">
+<channel>
+<title>Петрович</title>
+<item>
+<g:id>201001</g:id>
+<g:title>Клей плиточный Основит Гранит Т17 25 кг</g:title>
+<g:link>https://moscow.petrovich.ru/product/201001/</g:link>
+<g:price>499.00 RUB</g:price>
+<g:sale_price>459.00 RUB</g:sale_price>
+<g:availability>in stock</g:availability>
+<g:product_type>Стройматериалы &gt; Сухие смеси &gt; Клей для плитки</g:product_type>
+<g:brand>Основит</g:brand>
+</item>
+<item>
+<g:id>201002</g:id>
+<g:title>Клей плиточный Ceresit CM 11 25 кг</g:title>
+<g:link>https://moscow.petrovich.ru/product/201002/</g:link>
+<g:price>569.00 RUB</g:price>
+<g:availability>out of stock</g:availability>
+<g:product_type>Стройматериалы &gt; Сухие смеси &gt; Клей для плитки</g:product_type>
+<g:brand>Ceresit</g:brand>
+</item>
+</channel>
+</rss>

@@ -1,0 +1,6 @@
+id;available;categoryId;currencyId;name;price;oldprice;url;vendor;vendorCode;param_Фасовка
+101201;true;Стройматериалы > Сухие смеси > Штукатурки;RUB;Штукатурка гипсовая ОСНОВИТ Гипсвелл PC21 G;579,00;;https://ad.admitad.com/g/xyz/?ulp=https%3A%2F%2Fpetrovich.ru%2Fproduct%2F101201%2F;Основит;PC21G;30 кг
+101202;true;Стройматериалы > Сухие смеси > Штукатурки;RUB;Штукатурка гипсовая Knauf Ротбанд 30 кг;699,00;749,00;https://petrovich.ru/catalog/1546/101202/;Knauf;;
+101203;false;Стройматериалы > Сухие смеси > Штукатурки;RUB;Штукатурка гипсовая Bergauf Bau Putz Gips 30 кг;515;;https://petrovich.ru/product/101203/;Bergauf;;
+101204;true;Стройматериалы > Сухие смеси > Штукатурки;RUB;Штукатурка гипсовая Старатели 30 кг;530;;https://petrovich.ru/product/101204/;Старатели;;
+101205;true;Стройматериалы > Сухие смеси > Шпаклевки;RUB;Шпаклевка Vetonit LR+ 20 кг;899;;https://petrovich.ru/product/101205/;Vetonit;;

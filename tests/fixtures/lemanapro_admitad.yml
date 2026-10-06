@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Синтетический образец в формате YML (как «Каталог товаров» Admitad / «Где Слон?»). Цены вымышленные. -->
+<yml_catalog date="2026-10-06 06:00">
+  <shop>
+    <name>Лемана ПРО</name>
+    <company>ООО «Лемана ПРО»</company>
+    <url>https://lemanapro.ru</url>
+    <currencies><currency id="RUR" rate="1"/></currencies>
+    <categories>
+      <category id="100">Стройматериалы</category>
+      <category id="110" parentId="100">Сухие строительные смеси</category>
+      <category id="111" parentId="110">Штукатурки</category>
+      <category id="112" parentId="110">Шпаклёвки</category>
+      <category id="200">Краски</category>
+    </categories>
+    <offers>
+      <offer id="82065432" available="true">
+        <url>https://ad.admitad.com/g/abc123/?i=5&amp;ulp=https%3A%2F%2Flemanapro.ru%2Fproduct%2Fshtukaturka-gipsovaya-osnovit-gipsvell-pc21-g-30-kg-82065432%2F</url>
+        <price>590</price>
+        <oldprice>640</oldprice>
+        <currencyId>RUR</currencyId>
+        <categoryId>111</categoryId>
+        <name>Штукатурка гипсовая Основит Гипсвелл PC21 G 30 кг</name>
+        <vendor>Основит</vendor>
+        <vendorCode>PC21G</vendorCode>
+        <param name="Вес, кг">30</param>
+      </offer>
+      <offer id="12345678" available="true">
+        <url>https://ad.admitad.com/g/abc123/?i=5&amp;ulp=https%3A%2F%2Flemanapro.ru%2Fproduct%2Fshtukaturka-gipsovaya-knauf-rotband-30-kg-12345678%2F</url>
+        <price>720</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>111</categoryId>
+        <name>Штукатурка гипсовая Knauf Ротбанд 30 кг</name>
+        <vendor>Knauf</vendor>
+      </offer>
+      <offer id="12345679" available="true">
+        <url>https://lemanapro.ru/product/shtukaturka-gipsovaya-volma-sloy-30-kg-12345679/?utm_source=feed</url>
+        <price>495</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>111</categoryId>
+        <name>Штукатурка гипсовая Волма Слой, 30кг</name>
+        <vendor>Волма</vendor>
+      </offer>
+      <offer id="12345680" available="false">
+        <url>https://lemanapro.ru/product/shtukaturka-gipsovaya-unis-teplon-25-kg-12345680/</url>
+        <price>455</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>111</categoryId>
+        <name>Штукатурка гипсовая Юнис Теплон 25 кг</name>
+        <vendor>Юнис</vendor>
+      </offer>
+      <offer id="12345681" available="true">
+        <url>https://lemanapro.ru/product/shtukaturka-dekorativnaya-probnik-12345681/</url>
+        <price>350</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>111</categoryId>
+        <name>Штукатурка декоративная пробник</name>
+        <vendor>Декор</vendor>
+      </offer>
+      <offer id="12345682" available="true">
+        <url>https://lemanapro.ru/product/shtukaturka-gipsovaya-mini-5-kg-12345682/</url>
+        <price>590</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>111</categoryId>
+        <name>Штукатурка гипсовая мини 5 кг</name>
+        <vendor>Мини</vendor>
+      </offer>
+      <offer id="12345683" available="true">
+        <url>https://lemanapro.ru/product/shtukaturka-polimernaya-20-l-12345683/</url>
+        <price>1290</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>111</categoryId>
+        <name>Штукатурка полимерная готовая 20 л</name>
+        <vendor>Ceresit</vendor>
+      </offer>
+      <offer id="55555555" available="true">
+        <url>https://lemanapro.ru/product/kraska-belaya-10-l-55555555/</url>
+        <price>2490</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>200</categoryId>
+        <name>Краска белая 10 л</name>
+        <vendor>Dulux</vendor>
+      </offer>
+      <offer id="66666666" available="true">
+        <url>https://lemanapro.ru/product/shpaklevka-finishnaya-osnovit-ekonsilk-pg34-20-kg-66666666/</url>
+        <price>610</price>
+        <currencyId>RUR</currencyId>
+        <categoryId>112</categoryId>
+        <name>Шпаклёвка финишная Основит Эконсилк PG34 W 20 кг</name>
+        <vendor>Основит</vendor>
+      </offer>
+    </offers>
+  </shop>
+</yml_catalog>

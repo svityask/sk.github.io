@@ -1,0 +1,1120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Цены: Петрович и Лемана ПРО</title>
+<style>
+:root {
+  --bg: #f4f5f2; --panel: #ffffff; --ink: #1d2320; --muted: #66706b; --line: #e1e4df;
+  --accent: #1f6b4f; --accent-ink: #ffffff; --accent-soft: #e3f0ea;
+  --warn: #8a5a00; --warn-soft: #fff4dc; --bad: #b42318; --good: #067647; --chip: #eef0ec;
+  --radius: 10px; --shadow: 0 1px 2px rgba(20,30,25,.06), 0 2px 8px rgba(20,30,25,.05);
+  --s1: #2a78d6; --s2: #eb6834; --grid: #e7eae5;   /* серии графиков: проверенная палитра, слоты 1 и 2 */
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141816; --panel: #1c211f; --ink: #e8ece9; --muted: #9aa49f; --line: #2c3330;
+    --accent: #4fb68d; --accent-ink: #0d1411; --accent-soft: #1d332a;
+    --warn: #f0c46b; --warn-soft: #3a2f17; --bad: #ff8a7a; --good: #67d29f; --chip: #252b28;
+    --shadow: none;
+    --s1: #3987e5; --s2: #d95926; --grid: #2c3330;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+header { display: flex; align-items: center; gap: 24px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+header .ver { color: var(--muted); font-size: 12px; margin-left: 6px; font-weight: 400; }
+nav { display: flex; gap: 4px; margin-left: auto; }
+nav button { border: 0; background: none; padding: 8px 14px; border-radius: 8px; font: inherit; color: var(--muted); cursor: pointer; }
+nav button.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+main { max-width: 1040px; margin: 0 auto; padding: 22px 24px 60px; }
+section.tab { display: none; } section.tab.on { display: block; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.card h2 { font-size: 15px; margin: 0 0 12px; }
+.card h3 { font-size: 13px; margin: 16px 0 6px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+button.btn { border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 8px 14px; border-radius: 8px; font: inherit; cursor: pointer; }
+button.btn:hover { border-color: var(--muted); }
+button.btn:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.big { font-size: 17px; padding: 14px 34px; border-radius: 12px; }
+button.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font: inherit; }
+button.x { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 6px; }
+input[type=text], input[type=number], input[type=time], textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+textarea { min-height: 84px; resize: vertical; }
+label.f { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 13px; }
+label.check { display: flex; gap: 8px; align-items: center; margin: 8px 0; cursor: pointer; }
+.hero { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.hero .state { flex: 1; min-width: 240px; }
+.state .big-text { font-size: 15px; font-weight: 600; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes s { to { transform: rotate(360deg); } }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; display: flex; gap: 14px; align-items: center; }
+.banner b { color: var(--ink); }
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 18px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+.stat .n { font-size: 22px; font-weight: 600; }
+.stat .l { color: var(--muted); font-size: 12px; }
+.src { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); }
+.src:first-of-type { border-top: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: var(--muted); flex: none; transform: translateY(-1px); }
+.dot.ok { background: var(--good); } .dot.bad { background: var(--bad); } .dot.off { background: var(--line); }
+.warn-list { margin: 8px 0 0; padding-left: 18px; color: var(--warn); }
+table { width: 100%; border-collapse: collapse; }
+td, th { padding: 7px 6px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; border-top: 0; }
+td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+.scale { position: relative; height: 10px; background: var(--chip); border-radius: 5px; min-width: 140px; }
+.scale .mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--muted); }
+.scale .bar { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+.pos { color: var(--bad); } .neg { color: var(--good); }
+.chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 1px 9px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.seg { display: inline-flex; background: var(--chip); border-radius: 9px; padding: 3px; gap: 2px; }
+.seg button { border: 0; background: none; padding: 6px 14px; border-radius: 7px; font: inherit; cursor: pointer; color: var(--muted); }
+.seg button.on { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
+.list-item { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.list-item:first-child { border-top: 0; }
+.list-item .grow { flex: 1; min-width: 0; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result { margin-top: 10px; padding: 10px 12px; background: var(--bg); border-radius: 8px; font-size: 13px; }
+.result.bad { color: var(--bad); }
+.empty { color: var(--muted); padding: 6px 0; }
+.rules li { margin: 3px 0; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--panel); padding: 9px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.on { opacity: 1; }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--bg); }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+.step { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.step .n { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--chip); align-items: center; justify-content: center; font-size: 12px; font-weight: 600; margin-right: 8px; }
+.step.done .n { background: var(--good); color: var(--panel); }
+.step.done { opacity: .7; }
+.step b { font-size: 14px; }
+.step p { margin: 6px 0 10px; color: var(--muted); font-size: 12.5px; }
+.ev { font-size: 12px; white-space: nowrap; }
+.ev.gone, .ev.out { color: var(--bad); } .ev.new, .ev.back { color: var(--good); }
+.filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.filters input[type=text] { flex: 1; min-width: 220px; }
+.shade { position: fixed; inset: 0; background: rgba(10,15,12,.35); z-index: 20; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100vw); background: var(--panel); z-index: 21; overflow-y: auto; padding: 20px 22px 40px; box-shadow: -8px 0 24px rgba(0,0,0,.12); }
+.drawer h2 { font-size: 16px; margin: 0 30px 6px 0; }
+.drawer .close { position: absolute; top: 12px; right: 12px; }
+.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+.facts div { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.facts .l { color: var(--muted); font-size: 12px; } .facts .v { font-weight: 600; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: var(--shadow); white-space: nowrap; }
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin: 4px 0 6px; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.hc { display: flex; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); }
+.hc:first-child { border-top: 0; }
+.badge { display: inline-block; min-width: 74px; text-align: center; border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
+.badge.ok { background: var(--accent-soft); color: var(--good); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.fail { background: rgba(180,35,24,.12); color: var(--bad); }
+.banner.fail { background: rgba(180,35,24,.10); color: var(--bad); }
+.jl { padding: 3px 0; border-top: 1px dashed var(--line); }
+.jl:first-child { border-top: 0; }
+.jl .lv { display: inline-block; width: 64px; font-weight: 600; }
+.jl.WARNING .lv { color: var(--warn); } .jl.ERROR .lv { color: var(--bad); } .jl.DEBUG { color: var(--muted); }
+.jl .ex { color: var(--muted); }
+table.tight td, table.tight th { padding: 5px 6px; font-size: 12.5px; }
+.spot-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+.spot-item:first-child { border-top: 0; }
+.spot-item .grow { flex: 1; min-width: 0; }
+.spot-item.done .grow > a { color: var(--muted); }
+.spot-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 380px; }
+.spot-actions .btn { padding: 5px 10px; font-size: 12.5px; }
+.spot-fix { display: flex; gap: 8px; margin-top: 8px; }
+.spot-fix input { max-width: 260px; }
+.kv { color: var(--muted); } .kv b { color: var(--ink); font-weight: 600; }
+.pilot { margin-top: 12px; font-size: 13px; }
+.srcline { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; }
+.srcline span { display: inline-flex; gap: 6px; align-items: center; }
+@media (max-width: 760px) {
+  header { flex-wrap: wrap; gap: 8px; padding: 10px 16px; }
+  nav { margin-left: 0; overflow-x: auto; max-width: 100%; }
+  nav button { white-space: nowrap; padding: 6px 10px; }
+  main { padding: 16px 16px 48px; }
+  .stats { grid-template-columns: 1fr 1fr; }
+  .spot-item { flex-direction: column; }
+  .spot-actions { justify-content: flex-start; max-width: none; }
+}
+.journal { background: var(--bg); border-radius: 8px; padding: 10px 12px; font: 12px/1.5 Consolas, "Cascadia Mono", monospace; max-height: 360px; overflow: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Цены: Петрович и Лемана ПРО <span class="ver" id="ver"></span></h1>
+  <nav>
+    <button data-tab="home" class="on">Главная</button>
+    <button data-tab="products">Товары</button>
+    <button data-tab="spot">Проверка</button>
+    <button data-tab="track">Что отслеживаем</button>
+    <button data-tab="condition" id="nav-condition" hidden>Состояние</button>
+    <button data-tab="settings">Настройки</button>
+  </nav>
+</header>
+<main>
+
+<!-- ============================== ГЛАВНАЯ -->
+<section class="tab on" id="tab-home">
+  <div class="banner" id="health-banner" hidden>
+    <div style="flex:1" id="health-text"></div>
+    <button class="btn" data-go="condition">Подробнее</button>
+  </div>
+  <div class="banner" id="human" hidden>
+    <div style="flex:1"><b>Нужна ваша помощь.</b> <span id="human-text"></span></div>
+    <button class="btn primary" id="human-done">Готово</button>
+  </div>
+
+  <div class="card" id="onboard" hidden>
+    <h2>Начало работы</h2>
+    <div class="steps">
+      <div class="step" id="st1"><b><span class="n">1</span>Фид сети</b>
+        <p>Вставьте ссылку на товарный фид из Admitad или «Где Слон?» и нажмите «Проверить связь». Нет фида — можно пропустить: цены возьмутся с сайта.</p>
+        <button class="btn" data-go="settings">Открыть настройки</button></div>
+      <div class="step" id="st2"><b><span class="n">2</span>Что отслеживать</b>
+        <p>Выберите категории фида (штукатурки, шпаклёвки, клей…) или вставьте ссылки на разделы и товары.</p>
+        <button class="btn" data-go="track">Выбрать</button></div>
+      <div class="step" id="st3"><b><span class="n">3</span>Первый сбор</b>
+        <p>Нажмите «Собрать цены». Отчёт Excel появится в папке «Документы\Монитор Основит DIY».</p></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="hero">
+      <button class="btn primary big" id="run">Собрать цены</button>
+      <div class="state">
+        <div class="big-text" id="state-main">—</div>
+        <div class="muted small" id="state-sub"></div>
+      </div>
+      <button class="btn" id="cancel" hidden>Остановить</button>
+    </div>
+    <div class="stats" id="stats" hidden>
+      <div class="stat"><div class="n" id="s-prices">0</div><div class="l">цен собрано</div></div>
+      <div class="stat"><div class="n" id="s-changes">0</div><div class="l">изменений цены</div></div>
+      <div class="stat"><div class="n" id="s-review">0</div><div class="l">на проверку</div></div>
+      <div class="stat"><div class="n" id="s-ours">0</div><div class="l">товаров Основит в сравнении</div></div>
+    </div>
+    <div class="srcline" id="src-line"></div>
+    <div class="pilot muted" id="pilot-line"></div>
+    <div class="row" style="margin-top:14px" id="report-row" hidden>
+      <button class="btn" id="open-report">Открыть отчёт Excel</button>
+      <button class="btn" id="open-folder">Папка с отчётами</button>
+    </div>
+    <ul class="warn-list small" id="warnings"></ul>
+  </div>
+
+  <div class="card" id="sources-card">
+    <h2>Откуда цены</h2>
+    <div id="sources"></div>
+  </div>
+
+  <div class="card">
+    <h2>Основит и рынок <span class="muted small">— цена за кг/л против середины аналогов · нажмите строку, чтобы открыть товар</span></h2>
+    <div id="market"></div>
+  </div>
+
+  <div class="card" id="assortment-card">
+    <h2>Ассортимент и наличие <span class="muted small">— с прошлого сбора</span></h2>
+    <div id="assortment"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Изменения цен</h2>
+      <div id="changes"></div>
+    </div>
+    <div class="card">
+      <h2>На проверку <span class="muted small">— откройте ссылку и решите</span></h2>
+      <div id="review"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== ТОВАРЫ -->
+<section class="tab" id="tab-products">
+  <div class="card">
+    <div class="filters">
+      <input type="text" id="p-q" placeholder="Поиск: название, бренд, вид товара, артикул">
+      <div class="seg" id="p-site"></div>
+      <label class="check"><input type="checkbox" id="p-ours"> только Основит</label>
+    </div>
+    <div id="p-list"></div>
+  </div>
+</section>
+
+<!-- ============================== ПРОВЕРКА -->
+<section class="tab" id="tab-spot">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div style="flex:1;min-width:260px"><h2 style="margin:0 0 4px">Выборочная проверка</h2>
+        <div class="muted small">Откройте товар на сайте и сравните с тем, что видит приложение: цену, фасовку, вид товара. Ошибку фасовки и вида исправьте тут же — приложение запомнит. Так становится видно, можно ли доверять отчёту.</div></div>
+      <button class="btn primary" id="spot-new">Новая выборка — 30 товаров</button>
+    </div>
+    <div class="stats" id="spot-stats"></div>
+  </div>
+  <div class="card">
+    <div id="spot-progress" class="muted small" style="margin-bottom:6px"></div>
+    <div id="spot-list"></div>
+  </div>
+</section>
+
+<!-- ============================== ЧТО ОТСЛЕЖИВАЕМ -->
+<section class="tab" id="tab-track">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="seg" id="track-site"></div>
+      <span class="muted small">Цены берутся из фида сети; чего в фиде нет — из окна Edge.</span>
+    </div>
+
+    <h3>Категории фида</h3>
+    <div id="cat-hint" class="muted small"></div>
+    <div id="cat-box">
+      <input type="text" id="cat-q" placeholder="Найти категорию: штукатурки, шпаклёвки, клей для плитки…">
+      <div id="cat-list" style="margin-top:6px"></div>
+    </div>
+
+    <h3>Ссылки на разделы и товары</h3>
+    <textarea id="links" placeholder="Вставьте ссылки по одной в строке, например&#10;https://lemanapro.ru/catalogue/shtukaturki/&#10;https://petrovich.ru/product/101201/"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn primary" id="add-links">Добавить</button>
+      <span class="muted small">Ссылка на товар — следим за конкретной карточкой. Ссылка на раздел — сайт откроется в окне Edge, только этот раздел.</span>
+    </div>
+    <div id="links-result"></div>
+  </div>
+
+  <div class="card">
+    <h2>Отслеживается</h2>
+    <div id="tracked"></div>
+  </div>
+
+  <div class="card">
+    <h2>Ваши решения <span class="muted small">— «Не конкурент» и «Всё верно»; любое можно вернуть</span></h2>
+    <div id="decisions"></div>
+  </div>
+</section>
+
+<!-- ============================== НАСТРОЙКИ -->
+<section class="tab" id="tab-settings">
+  <div class="grid2" id="site-settings"></div>
+
+  <div class="card">
+    <h2>Общее</h2>
+    <div class="grid2">
+      <div>
+        <label class="f">Слова бренда (через запятую)</label>
+        <input type="text" id="brand">
+        <div class="muted small">По ним товар считается нашим: в поле «производитель» фида или в названии.</div>
+        <label class="f">Папка для отчётов</label>
+        <input type="text" id="report-dir" placeholder="Документы\Монитор Основит DIY">
+      </div>
+      <div>
+        <label class="f">Вторая папка для резервных копий</label>
+        <input type="text" id="mirror-dir" placeholder="Например, сетевой диск или папка OneDrive / Яндекс Диска">
+        <div class="muted small">Копия базы и настроек будет класться и сюда — на случай, если с диском компьютера что-то случится. Пусто — только в папку приложения.</div>
+        <label class="check" style="margin-top:14px"><input type="checkbox" id="alert-win"> Уведомление Windows, если сбор не прошёл</label>
+        <label class="check"><input type="checkbox" id="expert"> Режим специалиста</label>
+        <div class="muted small">Показывает вкладку «Состояние» (метрики, журнал, сбои), откуда цены на Главной и тонкие настройки сбора.</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px"><button class="btn primary" id="save">Сохранить</button><span class="muted small" id="saved"></span></div>
+  </div>
+
+  <div class="card" id="expert-card">
+    <h2>Для специалиста</h2>
+    <div class="grid2">
+      <div>
+        <label class="f">Пауза между страницами сайта, секунд</label>
+        <input type="number" id="pause" min="5" step="1">
+        <label class="f">Не больше страниц сайта за сбор (на сеть)</label>
+        <input type="number" id="maxpages" min="1" max="200" step="1">
+        <label class="f">Страниц выдачи на один раздел</label>
+        <input type="number" id="maxsec" min="1" max="20" step="1">
+        <label class="f">Путь к Microsoft Edge (если не находится сам)</label>
+        <input type="text" id="edge-path" placeholder="C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe">
+      </div>
+      <div>
+        <label class="f">Сверять с сайтом карточек из фида за сбор</label>
+        <input type="number" id="ccn" min="0" max="30" step="1">
+        <div class="muted small">Открываются в окне Edge и сравниваются с ценой фида: так видно, насколько цены фида расходятся с полкой. 0 — не сверять.</div>
+        <label class="check" style="margin-top:14px"><input type="checkbox" id="shots"> Снимок экрана при сбое страницы</label>
+        <div class="muted small">Только при сбоях (капча, 429, пустая страница, нет цены), вместе с HTML. Хранится не больше 60 дампов и 200 МБ — старые удаляются сами.</div>
+        <label class="f">Webhook для тревог (необязательно)</label>
+        <input type="text" id="alert-hook" placeholder="https://api.telegram.org/bot…/sendMessage?chat_id=…&amp;text={text}">
+        <div class="muted small">Любой адрес: POST {"text": …}. Если в адресе есть {text}, туда подставится текст — так работает Telegram-бот.</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px"><button class="btn primary" id="save2">Сохранить</button></div>
+  </div>
+
+  <div class="card" id="schedule-card">
+    <h2>Сбор по расписанию</h2>
+    <div class="row">
+      <label class="check"><input type="checkbox" id="sched-on"> Собирать каждый день в</label>
+      <input type="time" id="sched-at" value="08:30" style="width:120px">
+      <button class="btn" id="sched-save">Применить</button>
+    </div>
+    <label class="check"><input type="checkbox" id="sched-wake"> Будить компьютер из сна для сбора</label>
+    <div class="muted small">Если в это время компьютер был выключен, сбор пройдёт сразу после включения. Ноутбук собирает и от батареи.</div>
+    <label class="check"><input type="checkbox" id="sched-watch" checked> Следить, что сбор проходит: проверка каждые 6 часов, уведомление, если сбора не было дольше <input type="number" id="max-age" min="2" step="1" style="width:70px;margin:0 4px"> ч</label>
+    <div class="muted small">По расписанию работает фид. Если сайт покажет проверку браузера или ответит 429, сеть встанет на паузу не меньше чем на час — без человека проверку никто не проходит.</div>
+  </div>
+
+  <div class="card" id="selftest-card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Проверка компьютера</h2>
+      <button class="btn" id="selftest-run">Проверить компьютер</button></div>
+    <div class="muted small" style="margin-top:6px">Python, Edge, папки, Планировщик, уведомления, доступ к фидам, место на диске — всё, что нужно для сбора по расписанию.</div>
+    <div id="selftest" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card" id="rules-card">
+    <h2>Правила сбора с сайта</h2>
+    <ul class="rules small">
+      <li>Открываются только разделы и товары из списка «Что отслеживаем» — не весь каталог.</li>
+      <li>Соблюдается robots.txt сети: запрещённый адрес не открывается.</li>
+      <li>Между страницами пауза не меньше 5 секунд, за один сбор — не больше заданного числа страниц.</li>
+      <li>Никакого распознавания капчи, прокси и подмены браузера. Если сайт просит подтвердить, что вы человек, — проверку проходите вы.</li>
+      <li>Сайт ответил 429 или показал капчу без человека — сеть встаёт на паузу не меньше чем на час (дольше, если сайт так просит), при повторах пауза удваивается.</li>
+      <li>Страница не открылась — один повтор через 10–15 с; сайт дважды отказал — сеть пропускается до следующего сбора, после трёх таких сборов подряд — пауза.</li>
+      <li>Цены из окна Edge и из фида не смешиваются, если в них разные города.</li>
+    </ul>
+    <button class="link small" id="open-samples">Открыть папку с образцами страниц</button>
+  </div>
+
+</section>
+
+<!-- ============================== СОСТОЯНИЕ -->
+<section class="tab" id="tab-condition">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Здоровье</h2>
+      <button class="btn" id="cond-refresh">Проверить сейчас</button></div>
+    <div id="cond-health" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
+    <h2>Источники <span class="muted small">— после 429 или капчи источник встаёт на паузу не меньше чем на час; после трёх сбоев подряд — тоже</span></h2>
+    <div id="cond-breakers"></div>
+  </div>
+  <div class="card">
+    <h2>Метрики сборов</h2>
+    <div id="cond-metrics" style="overflow-x:auto"></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Сбои</h2>
+        <button class="btn" data-open="failures">Открыть папку</button></div>
+      <div class="muted small" style="margin:6px 0">HTML страницы, снимок экрана и описание — по ним видно, что показал сайт.</div>
+      <div id="cond-failures"></div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">Резервные копии</h2>
+        <div class="row" style="gap:8px"><button class="btn" id="backup-now">Сделать сейчас</button><button class="btn" data-open="backups">Папка</button></div></div>
+      <div class="muted small" style="margin:6px 0">После каждого удачного сбора (не чаще раза в 20 ч): 10 последних и по одной за 8 недель. Восстановить: закройте приложение и запустите <code>Запустить.cmd --restore "файл.zip"</code>.</div>
+      <div id="cond-backups"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Журнал</h2>
+      <div class="row" style="gap:8px"><div class="seg" id="j-level"></div><button class="btn" data-open="logs">Папка</button></div></div>
+    <div class="journal" id="journal" style="margin-top:10px"></div>
+  </div>
+</section>
+</main>
+<div class="shade" id="shade" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Товар">
+  <button class="x close" id="drawer-close" title="Закрыть">×</button>
+  <div id="drawer-body"></div>
+</aside>
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = "__TOKEN__";
+let S = null, trackSite = "lemanapro", polling = null, reviewAll = false, pSite = "", marketAll = false, changesAll = false;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const rub = (x) => x == null ? "—" : x.toLocaleString("ru-RU", {maximumFractionDigits: 2}) + " ₽";
+const pct = (x) => x == null ? "—" : (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toLocaleString("ru-RU", {maximumFractionDigits: 1}) + " %";
+const when = (ts) => ts ? new Date(ts * 1000).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}) : "—";
+
+async function api(path, body) {
+  const opt = {headers: {"X-Token": TOKEN}};
+  if (body !== undefined) { opt.method = "POST"; opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
+  const r = await fetch(path, opt);
+  return r.json();
+}
+function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 2200); }
+
+function goTab(name) {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
+  document.querySelectorAll("section.tab").forEach(s => s.classList.toggle("on", s.id === "tab-" + name));
+  if (name === "track") renderTrack();
+  if (name === "products") renderProducts();
+  if (name === "settings") renderSettings();
+  if (name === "condition") renderCondition();
+  if (name === "spot") renderSpot();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => goTab(b.dataset.tab));
+document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => goTab(b.dataset.go));
+
+// ------------------------------------------------------------ состояние
+async function refresh() {
+  S = await api("/api/state");
+  $("ver").textContent = S.version;
+  renderHome();
+  if ($("tab-track").classList.contains("on")) renderTracked();
+  if (!polling && S.status.running) startPolling();
+}
+function startPolling() {
+  polling = setInterval(async () => {
+    S = await api("/api/state");
+    renderHome();
+    if (!S.status.running) { clearInterval(polling); polling = null; }
+  }, 1500);
+}
+setInterval(() => { if (!polling) api("/api/state").then(s => { S = s; }); }, 20000);  // окно живо
+
+function renderHome() {
+  const st = S.status, last = S.last, sum = last ? last.summary : null;
+  $("run").disabled = st.running;
+  $("cancel").hidden = !st.running;
+  $("human").hidden = !st.human;
+  $("human-text").textContent = st.human || "";
+  if (st.running) {
+    $("state-main").innerHTML = '<span class="spin"></span>' + esc(st.text || "Собираю…");
+    $("state-sub").textContent = "Можно свернуть окно — сбор идёт сам.";
+  } else if (last) {
+    $("state-main").textContent = last.status === "ошибка" ? "Последний сбор прерван" : "Последний сбор — " + when(last.finished);
+    $("state-sub").textContent = last.status === "ошибка" ? (sum.error || "") : (sum.seconds != null ? `занял ${Math.max(1, Math.round(sum.seconds / 60))} мин` : "");
+  } else {
+    $("state-main").textContent = "Цены ещё не собирались";
+    const noFeed = !Object.values(S.settings.sites).some(s => s.feed);
+    $("state-sub").textContent = S.tracked.length ? (noFeed ? "Фид не задан — цены будут читаться только с сайта. Ссылку на фид можно вставить в Настройках." : "") : "Сначала выберите, что отслеживать.";
+  }
+  const has = !!(sum && !sum.error);
+  $("stats").hidden = !has; $("report-row").hidden = !(has && sum.report);
+  if (has) {
+    $("s-prices").textContent = sum.prices || 0;
+    $("s-changes").textContent = (sum.changes || []).length;
+    $("s-review").textContent = (sum.review_items || []).length;
+    $("s-ours").textContent = (sum.market || []).length;
+  }
+  $("warnings").innerHTML = (sum && sum.warnings || []).map(w => `<li>${esc(w)}</li>`).join("");
+  const ex = !!(S.settings.ui && S.settings.ui.expert);
+  $("nav-condition").hidden = !ex; $("sources-card").hidden = !ex; $("src-line").hidden = ex;
+  $("assortment-card").hidden = !ex && !(sum && (sum.assortment || []).length);
+  renderSrcLine(sum); renderPilot();
+  renderHealthBanner(); renderOnboard(); renderSources(sum); renderMarket(sum); renderAssortment(sum); renderChanges(sum); renderReview(sum);
+}
+
+function renderHealthBanner() {
+  const h = S.health || {status: "ok", problems: []};
+  const fail = h.problems.filter(p => p.status === "fail");
+  const show = S.has_success && (fail.length || h.problems.some(p => /пауз/.test(p.detail)));
+  $("health-banner").hidden = !show;
+  $("health-banner").classList.toggle("fail", fail.length > 0);
+  if (show) $("health-text").innerHTML = "<b>" + (fail.length ? "Сбор не в порядке." : "Внимание.") + "</b> " +
+    esc((fail.length ? fail : h.problems).map(p => p.name + ": " + p.detail).join("; "));
+}
+
+function renderOnboard() {
+  $("onboard").hidden = S.has_success;
+  if (S.has_success) return;
+  const feedOk = Object.values(S.categories_loaded).some(Boolean);
+  $("st1").classList.toggle("done", feedOk);
+  $("st2").classList.toggle("done", S.tracked.length > 0);
+  $("st3").classList.toggle("done", S.has_success);
+}
+
+const EV = {new: "появился", gone: "пропал из фида", out: "закончился", back: "снова в наличии"};
+function renderAssortment(sum) {
+  const ev = (sum && sum.assortment || []).slice();
+  if (!ev.length) { $("assortment").innerHTML = `<div class="empty">${sum ? "Без изменений: новых и пропавших товаров нет, наличие то же." : "—"}</div>`; return; }
+  const order = {gone: 0, out: 1, new: 2, back: 3};
+  ev.sort((a, b) => (b.is_ours - a.is_ours) || (order[a.type] - order[b.type]));
+  $("assortment").innerHTML = ev.slice(0, 30).map(e => `<div class="list-item">
+      <span class="ev ${e.type}">${EV[e.type] || e.type}</span>
+      <div class="grow ellipsis"><a href="#" data-key="${esc(e.key)}">${esc(e.name)}</a> ${e.is_ours ? '<span class="chip">Основит</span>' : ""}</div>
+      <span class="small muted">${esc(S.site_titles[e.site])}</span><span class="num small">${rub(e.price)}</span></div>`).join("")
+    + (ev.length > 30 ? `<div class="small muted">…и ещё ${ev.length - 30} — в отчёте Excel, лист «Ассортимент»</div>` : "");
+  bindProductLinks($("assortment"));
+}
+
+function renderSrcLine(sum) {
+  const out = [];
+  for (const [site, conf] of Object.entries(S.settings.sites)) {
+    if (!conf.enabled) continue;
+    const info = sum && sum.sites ? sum.sites[site] : null;
+    let dot = "", txt = conf.feed ? "фид" : "сайт";
+    if (info && info.feed && info.feed.error) { dot = "bad"; txt = "фид не скачался"; }
+    else if (info && info.feed) { dot = "ok"; txt = `фид, ${info.feed.taken} цен` + (info.edge && info.edge.taken ? ` + сайт ${info.edge.taken}` : ""); }
+    else if (info && info.edge) { dot = info.edge.error ? "bad" : "ok"; txt = info.edge.error ? "сайт: " + info.edge.error : `сайт, ${info.edge.taken} цен`; }
+    out.push(`<span><span class="dot ${dot}"></span><b>${esc(S.site_titles[site])}</b> <span class="muted">${esc(txt)}</span></span>`);
+  }
+  $("src-line").innerHTML = out.join("");
+}
+
+function renderPilot() {
+  const st = S.spot || {};
+  if (!S.has_success) { $("pilot-line").innerHTML = ""; return; }
+  $("pilot-line").innerHTML = st.total
+    ? `Выборочная проверка: верно <b style="color:var(--ink)">${st.accuracy} %</b> из ${st.total} карточек за 90 дней · <button class="link" data-go2="spot">проверить ещё</button>`
+    : `Проверьте 30 карточек вручную — так станет видно, можно ли доверять отчёту. <button class="link" data-go2="spot">Начать проверку</button>`;
+  $("pilot-line").querySelectorAll("[data-go2]").forEach(b => b.onclick = () => goTab(b.dataset.go2));
+}
+
+function renderSources(sum) {
+  const out = [];
+  for (const [site, conf] of Object.entries(S.settings.sites)) {
+    const title = S.site_titles[site];
+    if (!conf.enabled) { out.push(`<div class="src"><span class="dot off"></span><div><b>${title}</b> <span class="muted">— выключена</span></div></div>`); continue; }
+    const info = sum && sum.sites ? sum.sites[site] : null;
+    let feedTxt, feedDot;
+    if (!conf.feed) { feedTxt = "фид не задан"; feedDot = "off"; }
+    else if (info && info.feed && info.feed.error) { feedTxt = info.feed.error; feedDot = "bad"; }
+    else if (info && info.feed) { const f = info.feed; feedTxt = `фид: ${f.date ? "выгрузка сети " + when(f.date) : "дата не указана"}, взято ${f.taken} из ${f.total}`; feedDot = "ok"; }
+    else { feedTxt = "фид задан, ещё не загружался"; feedDot = ""; }
+    let edgeTxt = conf.edge_enabled ? "сайт (Edge) — запасной путь" : "сайт (Edge) выключен";
+    if (info && info.edge) {
+      const e = info.edge;
+      edgeTxt = e.error ? "сайт: " + e.error : `сайт: ${e.pages} стр., ${e.taken} цен` + (e.stopped ? " — остановлено: " + e.stopped : "");
+    }
+    let ccTxt = "";
+    if (info && info.crosscheck) {
+      const c = info.crosscheck;
+      ccTxt = `сверка с сайтом: ${c.n} карт., совпали ${c.same}; в среднем сайт ${c.avg_pct >= 0 ? "дороже" : "дешевле"} фида на ${Math.abs(c.avg_pct).toLocaleString("ru-RU")} %`;
+    }
+    out.push(`<div class="src"><span class="dot ${feedDot}"></span><div><b>${title}</b> <span class="muted">${conf.feed_city ? "· " + esc(conf.feed_city) : ""}</span><br><span class="small">${esc(feedTxt)}</span><br><span class="small muted">${esc(edgeTxt)}</span>${ccTxt ? `<br><span class="small">${esc(ccTxt)}</span>` : ""}</div></div>`);
+  }
+  $("sources").innerHTML = out.join("");
+}
+
+function renderMarket(sum) {
+  const rows = sum && sum.market || [];
+  if (!rows.length) { $("market").innerHTML = `<div class="empty">${sum ? "Товаров Основит в отслеживаемых разделах нет." : "Появится после первого сбора."}</div>`; return; }
+  const max = Math.max(20, ...rows.map(r => Math.abs(r.deviation || 0)));
+  const lvl = (r) => !r.level ? "аналогов нет" : (r.level === "раздел" ? "весь раздел" : r.level) + ` · ${r.count}`;
+  // на Главной — самое важное: где мы сильнее всего дороже и дешевле рынка; остальное — по кнопке
+  const sorted = rows.slice().sort((a, b) => (b.deviation ?? -999) - (a.deviation ?? -999));
+  const LIM = 6, withDev = sorted.filter(r => r.deviation != null);
+  const shownRows = marketAll || sorted.length <= 2 * LIM + 2 ? sorted
+    : [...withDev.slice(0, LIM), ...withDev.slice(-LIM).filter(r => !withDev.slice(0, LIM).includes(r))];
+  $("market").innerHTML = `<table><tr><th>Товар</th><th>Вид · с чем сравнили</th><th class="num">За ед.</th><th class="num">Середина</th><th style="width:150px">Мы относительно рынка</th><th class="num"></th></tr>` +
+    shownRows.map(r => {
+      const d = r.deviation; let bar = "";
+      if (d != null) { const w = Math.min(50, Math.abs(d) / max * 50); bar = `<div class="bar" style="${d >= 0 ? "left:50%" : "left:" + (50 - w) + "%"};width:${w}%;background:${d >= 0 ? "var(--bad)" : "var(--good)"}"></div>`; }
+      return `<tr class="click" data-key="${esc(r.key)}"><td>${esc(r.name)} <span class="chip">${esc(r.pack)}</span>
+          <div class="small muted">${esc(S.site_titles[r.site])}</div></td>
+        <td class="small">${esc(r.kind || "вид не распознан")}<div class="muted">${esc(lvl(r))}</div></td>
+        <td class="num">${rub(r.per_unit)}/${esc(r.unit)}</td><td class="num">${r.median ? rub(r.median) + "/" + esc(r.unit) : "—"}</td>
+        <td><div class="scale"><div class="mid"></div>${bar}</div></td>
+        <td class="num ${d > 0.5 ? "pos" : d < -0.5 ? "neg" : ""}">${d == null ? '<span class="muted small">нет сравнения</span>' : pct(d)}</td></tr>`;
+    }).join("") + `</table>` + (shownRows.length < sorted.length
+      ? `<div class="row small" style="margin-top:8px"><span class="muted">Показаны ${LIM} дороже всего рынка и ${LIM} дешевле всего из ${sorted.length}.</span><button class="link" id="market-all">Показать все</button></div>` : "");
+  if ($("market-all")) $("market-all").onclick = () => { marketAll = true; renderMarket(sum); };
+  $("market").querySelectorAll("tr[data-key]").forEach(tr => tr.onclick = () => openProduct(tr.dataset.key));
+}
+
+function renderChanges(sum) {
+  const ch = sum && sum.changes || [];
+  if (!ch.length) { $("changes").innerHTML = `<div class="empty">${sum ? "С прошлого сбора цены не менялись." : "—"}</div>`; return; }
+  ch.sort((a, b) => (b.is_ours - a.is_ours) || Math.abs((b.new - b.old) / b.old) - Math.abs((a.new - a.old) / a.old));
+  const CL = changesAll ? 40 : 10;
+  $("changes").innerHTML = ch.slice(0, CL).map(c => {
+    const d = (c.new - c.old) / c.old * 100;
+    return `<div class="list-item"><div class="grow"><a href="#" data-key="${esc(c.key)}">${esc(c.name)}</a>
+      <div class="small muted">${esc(S.site_titles[c.site])} · ${rub(c.old)} → ${rub(c.new)}</div></div>
+      <div class="num ${d > 0 ? "pos" : "neg"}">${pct(d)}</div></div>`;
+  }).join("") + (ch.length > CL ? `<div class="small" style="margin-top:6px">` + (changesAll
+      ? `<span class="muted">…и ещё ${ch.length - CL} — в отчёте Excel</span>`
+      : `<button class="link" id="changes-all">Показать больше (всего ${ch.length})</button>`) + `</div>` : "");
+  if ($("changes-all")) $("changes-all").onclick = () => { changesAll = true; renderChanges(sum); };
+  bindProductLinks($("changes"));
+}
+
+function renderReview(sum) {
+  const items = sum && sum.review_items || [];
+  if (!items.length) { $("review").innerHTML = `<div class="empty">${sum ? "Проверять нечего." : "—"}</div>`; return; }
+  const shown = reviewAll ? items : items.slice(0, 12);
+  $("review").innerHTML = shown.map(i => `<div class="list-item"><div class="grow">
+      <a href="${esc(i.url)}" target="_blank">${esc(i.name)}</a>
+      <div class="small muted">${esc(S.site_titles[i.site])} · ${esc(i.reason)}</div></div>
+      ${i.kind === "missing" ? "" : `<div class="row" style="gap:6px;flex-wrap:nowrap">
+        <button class="btn small" data-k="${esc(i.key)}" data-d="exclude">Не конкурент</button>
+        <button class="btn small" data-k="${esc(i.key)}" data-d="accept:${esc(i.signature)}">Всё верно</button></div>`}
+    </div>`).join("") + (items.length > shown.length ? `<button class="link small" id="review-more">Показать все (${items.length})</button>` : "");
+  if ($("review-more")) $("review-more").onclick = () => { reviewAll = true; renderReview(sum); };
+  $("review").querySelectorAll("button[data-k]").forEach(b => b.onclick = async () => {
+    await api("/api/decide", {key: b.dataset.k, kind: b.dataset.d});
+    toast(b.dataset.d === "exclude" ? "Убрано из сравнения. Вернуть — «Что отслеживаем» → «Ваши решения»" : "Отмечено как проверенное");
+    refresh();
+  });
+}
+
+function bindProductLinks(root) {
+  root.querySelectorAll("a[data-key]").forEach(a => a.onclick = (e) => { e.preventDefault(); openProduct(a.dataset.key); });
+}
+
+// ------------------------------------------------------------ товары
+let pTimer = null;
+$("p-q").oninput = () => { clearTimeout(pTimer); pTimer = setTimeout(loadProducts, 200); };
+$("p-ours").onchange = loadProducts;
+function renderProducts() {
+  const opts = [["", "Все сети"], ...Object.entries(S.site_titles)];
+  $("p-site").innerHTML = opts.map(([k, t]) => `<button data-s="${k}" class="${k === pSite ? "on" : ""}">${t}</button>`).join("");
+  $("p-site").querySelectorAll("button").forEach(b => b.onclick = () => { pSite = b.dataset.s; renderProducts(); });
+  loadProducts();
+}
+async function loadProducts() {
+  const r = await api(`/api/products?q=${encodeURIComponent($("p-q").value)}&site=${pSite}&ours=${$("p-ours").checked ? 1 : 0}`);
+  if (!r.items.length) { $("p-list").innerHTML = `<div class="empty">${r.total === 0 && !$("p-q").value ? "Товары появятся после первого сбора." : "Ничего не нашлось."}</div>`; return; }
+  $("p-list").innerHTML = `<table><tr><th>Товар</th><th>Вид</th><th class="num">Цена</th><th class="num">За ед.</th><th class="num">Посл. изменение</th><th>Наличие</th></tr>` +
+    r.items.map(p => {
+      const d = p.prev_price ? (p.price - p.prev_price) / p.prev_price * 100 : null;
+      return `<tr class="click" data-key="${esc(p.key)}"><td>${esc(p.name)} ${p.is_ours ? '<span class="chip">Основит</span>' : ""}
+          <div class="small muted">${esc(p.site_title)}${p.pack ? " · " + esc(p.pack) : ""}${p.in_last_run ? "" : " · нет в последнем сборе"}${p.excluded ? " · не конкурент" : ""}</div></td>
+        <td class="small">${esc(p.kind || "—")}${p.kind_manual ? " ✎" : ""}</td>
+        <td class="num">${rub(p.price)}</td><td class="num">${p.per_unit ? rub(p.per_unit) + "/" + esc(p.pack_unit) : "—"}</td>
+        <td class="num ${d > 0 ? "pos" : d < 0 ? "neg" : ""}">${d ? pct(d) : ""}</td>
+        <td class="small">${p.available === 0 ? "нет" : p.available === 1 ? "есть" : ""}</td></tr>`;
+    }).join("") + `</table>` + (r.total > r.items.length ? `<div class="small muted">Показано ${r.items.length} из ${r.total} — уточните поиск</div>` : "");
+  $("p-list").querySelectorAll("tr[data-key]").forEach(tr => tr.onclick = () => openProduct(tr.dataset.key));
+}
+
+// ------------------------------------------------------------ карточка товара
+let kindLabels = null;
+function closeDrawer() { $("drawer").hidden = true; $("shade").hidden = true; }
+$("drawer-close").onclick = closeDrawer; $("shade").onclick = closeDrawer;
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+async function openProduct(key) {
+  if (!kindLabels) kindLabels = await api("/api/kinds");
+  const p = await api(`/api/product?key=${encodeURIComponent(key)}`);
+  $("drawer").hidden = false; $("shade").hidden = false;
+  if (p.error) { $("drawer-body").innerHTML = `<div class="empty">${esc(p.error)}</div>`; return; }
+  const unit = p.pack_unit || "";
+  const last = p.points.length ? p.points[p.points.length - 1] : null;
+  const lvl = last && last.level ? (last.level === "раздел" ? "весь раздел" : last.level) + `, ${last.count} тов.` : "";
+  $("drawer-body").innerHTML = `
+    <h2>${esc(p.name)}</h2>
+    <div class="small muted">${esc(p.site_title)} · артикул ${esc(p.code || "—")} · <a href="${esc(p.url)}" target="_blank">открыть на сайте</a></div>
+    <div class="facts">
+      <div><div class="l">Цена</div><div class="v">${rub(p.price)}</div></div>
+      <div><div class="l">За единицу</div><div class="v">${p.per_unit ? rub(p.per_unit) + "/" + esc(unit) : "—"}</div></div>
+      <div><div class="l">${p.is_ours && last && last.median ? "Середина аналогов" : "Фасовка"}</div><div class="v">${p.is_ours && last && last.median ? rub(last.median) + "/" + esc(unit) : esc(p.pack || "не распознана")}</div></div>
+    </div>
+    <div class="small muted">Наличие: ${p.available === 0 ? "нет" : p.available === 1 ? "есть" : "не указано"} · источник: ${p.source === "feed" ? "фид" : "сайт"} · город: ${esc(p.city || "—")}${lvl ? " · сравнение: " + esc(lvl) : ""}</div>
+
+    <h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 6px">Вид товара</h3>
+    <div class="row">
+      <input type="text" id="kind-in" list="kind-list" value="${esc(p.kind)}" placeholder="например, Штукатурка гипсовая" style="flex:1">
+      <datalist id="kind-list">${kindLabels.map(k => `<option value="${esc(k)}">`).join("")}</datalist>
+      <button class="btn" id="kind-save">Сохранить</button>
+      ${p.kind_manual ? '<button class="link small" id="kind-auto">вернуть автоматический</button>' : ""}
+    </div>
+    <div class="small muted" style="margin-top:4px">${p.kind_manual ? "Вид задан вручную." : "Вид определён по названию."} Аналоги — товары того же вида; новый вид учтётся в следующем сборе.</div>
+
+    <h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 6px">Фасовка</h3>
+    <div class="row">
+      <input type="text" id="pack-in" value="${esc(p.pack)}" placeholder="например, 25 кг или 0,9 л" style="flex:1">
+      <button class="btn" id="pack-save">Сохранить</button>
+      ${p.pack_manual ? '<button class="link small" id="pack-auto">вернуть автоматическую</button>' : ""}
+    </div>
+    <div class="small muted" style="margin-top:4px">${p.pack_manual ? "Фасовка задана вручную — сильнее названия и фида." : "Фасовка взята из названия или характеристик фида."} Цена за кг/л пересчитается сразу.</div>
+
+    <h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 6px">Динамика</h3>
+    <div id="p-chart"></div>
+
+    <h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 6px">${p.is_ours ? "Аналоги" : "Похожие товары"} в последнем сборе</h3>
+    <div id="p-analogs"></div>
+
+    ${p.crosscheck.length ? `<h3 style="font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 6px">Сверка фида с сайтом</h3>
+      ${p.crosscheck.map(c => `<div class="small">${when(c.ts)}: фид ${rub(c.feed_price)}, сайт ${rub(c.site_price)} (${pct((c.site_price - c.feed_price) / c.feed_price * 100)})</div>`).join("")}` : ""}
+
+    <div class="row" style="margin-top:20px">
+      ${p.excluded ? '<button class="btn" id="p-undo">Вернуть в сравнение</button>' : (p.is_ours ? "" : '<button class="btn" id="p-exclude">Не конкурент</button>')}
+    </div>`;
+  drawProductChart(p, unit);
+  $("p-analogs").innerHTML = p.analogs.length ? `<table><tr><th>Товар</th><th class="num">За ед.</th><th></th></tr>` + p.analogs.map(a => `
+      <tr class="click" data-key="${esc(a.key)}"><td>${esc(a.name)} <span class="chip">${esc(a.pack)}</span>${a.is_ours ? ' <span class="chip">Основит</span>' : ""}</td>
+      <td class="num">${rub(a.per_unit)}/${esc(a.pack_unit)}</td>
+      <td class="small muted">${a.excluded ? "не конкурент" : a.outlier ? "не в расчёте: цена ×" + a.outlier.toLocaleString("ru-RU") : a.analog ? "аналог" : "тот же тип"}</td></tr>`).join("") + `</table>`
+    : `<div class="empty">${p.kind ? "Похожих товаров того же вида в последнем сборе нет." : "Вид не распознан — укажите его выше, и в следующем сборе появятся аналоги."}</div>`;
+  $("p-analogs").querySelectorAll("tr[data-key]").forEach(tr => tr.onclick = () => openProduct(tr.dataset.key));
+  $("kind-save").onclick = async () => { await api("/api/kind", {key, kind: $("kind-in").value}); toast("Вид сохранён — учтётся в следующем сборе"); openProduct(key); };
+  const savePack = async (val) => { const r = await api("/api/pack", {key, pack: val}); toast(r.ok ? "Фасовка сохранена" + (r.pack ? ": " + r.pack : "") : r.error); if (r.ok) openProduct(key); };
+  $("pack-save").onclick = () => savePack($("pack-in").value);
+  if ($("pack-auto")) $("pack-auto").onclick = () => savePack("");
+  if ($("kind-auto")) $("kind-auto").onclick = async () => { await api("/api/kind", {key, kind: ""}); openProduct(key); };
+  if ($("p-exclude")) $("p-exclude").onclick = async () => { await api("/api/decide", {key, kind: "exclude"}); toast("Убрано из сравнения"); openProduct(key); refresh(); };
+  if ($("p-undo")) $("p-undo").onclick = async () => { await api("/api/decide", {key, kind: "undo"}); toast("Возвращено в сравнение"); openProduct(key); refresh(); };
+}
+
+function drawProductChart(p, unit) {
+  let series, yUnit;
+  if (p.is_ours && p.points.some(x => x.per_unit)) {
+    series = [
+      {name: "Основит", color: "var(--s1)", dash: "", pts: p.points.filter(x => x.per_unit != null).map(x => ({t: x.ts, v: x.per_unit}))},
+      {name: "Середина аналогов", color: "var(--s2)", dash: "6 4", pts: p.points.filter(x => x.median != null).map(x => ({t: x.ts, v: x.median}))},
+    ];
+    yUnit = "₽/" + unit;
+  } else {
+    // история хранит только изменения: продлеваем последнюю цену до последнего сбора
+    const pts = p.history.filter(h => h.price != null).map(h => ({t: h.ts, v: h.price}));
+    if (pts.length && p.last_seen > pts[pts.length - 1].t) pts.push({t: p.last_seen, v: pts[pts.length - 1].v, carry: true});
+    series = [{name: "Цена", color: "var(--s1)", dash: "", pts, step: true}];
+    yUnit = "₽";
+  }
+  lineChart($("p-chart"), series, yUnit);
+}
+
+// Линейный график: ось времени, одна ось Y, перекрестие и подсказка при наведении.
+function lineChart(box, series, yUnit) {
+  const all = series.flatMap(s => s.pts);
+  if (new Set(all.map(p => p.t)).size < 2) {
+    box.innerHTML = `<div class="empty">График появится после второго сбора.</div>`; return;
+  }
+  const W = 560, H = 230, L = 52, R = 14, T = 22, B = 26;
+  const ts = all.map(p => p.t), vs = all.map(p => p.v);
+  let t0 = Math.min(...ts), t1 = Math.max(...ts); if (t1 === t0) { t0 -= 3600; t1 += 3600; }
+  let v0 = Math.min(...vs), v1 = Math.max(...vs); const pad = Math.max((v1 - v0) * 0.15, v1 * 0.05) || 1; v0 = Math.max(0, v0 - pad); v1 += pad;
+  const x = t => L + (t - t0) / (t1 - t0) * (W - L - R), y = v => T + (1 - (v - v0) / (v1 - v0)) * (H - T - B);
+  const ticks = 4, grid = [];
+  for (let i = 0; i <= ticks; i++) {
+    const v = v0 + (v1 - v0) * i / ticks;
+    grid.push(`<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
+      <text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v.toLocaleString("ru-RU", {maximumFractionDigits: v1 - v0 < 10 ? 1 : 0})}</text>`);
+  }
+  const fmtD = t => new Date(t * 1000).toLocaleDateString("ru-RU", {day: "2-digit", month: "2-digit"});
+  const xl = [t0, (t0 + t1) / 2, t1].map((t, i) => `<text x="${x(t)}" y="${H - 6}" font-size="11" fill="var(--muted)" text-anchor="${["start", "middle", "end"][i]}">${fmtD(t)}</text>`);
+  const path = s => {
+    if (!s.pts.length) return "";
+    let d = "";
+    s.pts.forEach((p, i) => {
+      if (i === 0) d += `M${x(p.t)},${y(p.v)}`;
+      else if (s.step) d += `H${x(p.t)}V${y(p.v)}`;
+      else d += `L${x(p.t)},${y(p.v)}`;
+    });
+    const dots = s.pts.filter(p => !p.carry).map(p => `<circle cx="${x(p.t)}" cy="${y(p.v)}" r="4" fill="${s.color}" stroke="var(--panel)" stroke-width="2"/>`).join("");
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}/>${dots}`;
+  };
+  const legend = series.length > 1 ? `<div class="legend">${series.map(s => `<span><i style="border-top-color:${s.color};${s.dash ? "border-top-style:dashed" : ""}"></i>${esc(s.name)}</span>`).join("")}</div>` : "";
+  box.innerHTML = `${legend}<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(series.map(s => s.name).join(", "))}, ${esc(yUnit)}">
+      ${grid.join("")}${xl.join("")}
+      <text x="${L - 6}" y="11" text-anchor="end" font-size="11" fill="var(--muted)">${esc(yUnit)}</text>
+      ${series.map(path).join("")}
+      <line id="xh" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-width="1" visibility="hidden"/>
+      <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/>
+    </svg><div class="tip" hidden></div></div>`;
+  const svg = box.querySelector("svg"), tip = box.querySelector(".tip"), xh = box.querySelector("#xh");
+  const times = [...new Set(all.filter(p => !p.carry).map(p => p.t))].sort((a, b) => a - b);
+  box.querySelector("#hit").onmousemove = (e) => {
+    const r = svg.getBoundingClientRect(), mx = (e.clientX - r.left) / r.width * W;
+    const t = times.reduce((a, b) => Math.abs(x(b) - mx) < Math.abs(x(a) - mx) ? b : a, times[0]);
+    xh.setAttribute("x1", x(t)); xh.setAttribute("x2", x(t)); xh.setAttribute("visibility", "visible");
+    const rows = series.map(s => { const p = s.pts.filter(q => q.t <= t).pop(); return p ? `<div><span style="color:${s.color}">●</span> ${esc(s.name)}: <b>${p.v.toLocaleString("ru-RU", {maximumFractionDigits: 2})} ${esc(yUnit)}</b></div>` : ""; }).join("");
+    tip.innerHTML = `<div class="muted">${when(t)}</div>${rows}`; tip.hidden = false;
+    const px = x(t) / W * r.width; tip.style.left = Math.min(px + 12, r.width - tip.offsetWidth - 4) + "px"; tip.style.top = "8px";
+  };
+  box.querySelector("#hit").onmouseleave = () => { tip.hidden = true; xh.setAttribute("visibility", "hidden"); };
+}
+
+$("run").onclick = async () => { const r = await api("/api/run", {}); if (!r.started) toast(r.reason || "Сбор не запущен"); startPolling(); refresh(); };
+$("cancel").onclick = async () => { await api("/api/cancel", {}); toast("Останавливаю после текущей страницы"); };
+$("human-done").onclick = () => api("/api/human_done", {});
+$("open-report").onclick = () => api("/api/open", {path: S.last.summary.report});
+$("open-folder").onclick = () => api("/api/open", {what: "folder"});
+$("open-samples").onclick = () => api("/api/open", {what: "samples"});
+
+// ------------------------------------------------------------ выборочная проверка
+const VERD = {ok: "верно", price: "цена не та", pack: "фасовка не та", kind: "вид не тот", not_competitor: "не конкурент"};
+async function renderSpot() {
+  if (!kindLabels) kindLabels = await api("/api/kinds");
+  const v = await api("/api/spot"), st = v.stats;
+  const tile = (n, l) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`;
+  $("spot-stats").innerHTML = st.total
+    ? tile(st.accuracy + " %", "карточек верно") + tile(st.total, "проверено за 90 дней") + tile(st.by.pack + st.by.kind, "ошибок фасовки и вида") + tile(st.by.price, "цена не совпала с сайтом")
+    : "";
+  $("spot-stats").hidden = !st.total;
+  const done = v.items.filter(i => i.check).length;
+  $("spot-progress").textContent = v.items.length ? `Текущая выборка: проверено ${done} из ${v.items.length}` + (done === v.items.length ? " — готово, можно взять новую." : "") : "";
+  if (!v.items.length) {
+    $("spot-list").innerHTML = `<div class="empty">${S.has_success ? "Нажмите «Новая выборка» — приложение возьмёт 30 товаров из последних сборов: сначала Основит, остальное поровну по сетям." : "Выборка появится после первого сбора."}</div>`;
+    return;
+  }
+  $("spot-list").innerHTML = v.items.map(i => {
+    const c = i.check;
+    const facts = [`<span class="kv">Цена <b>${rub(i.price)}</b></span>`,
+      `<span class="kv">Фасовка <b>${esc(i.pack || "не распознана")}</b>${i.pack_manual ? " ✎" : ""}</span>`,
+      `<span class="kv">Вид <b>${esc(i.kind || "не распознан")}</b>${i.kind_manual ? " ✎" : ""}</span>`,
+      i.per_unit ? `<span class="kv">${rub(i.per_unit)}/${esc(i.pack_unit)}</span>` : ""].filter(Boolean).join(" · ");
+    const actions = c
+      ? `<span class="badge ${c.verdict === "ok" ? "ok" : "warn"}">${VERD[c.verdict]}</span><button class="link small" data-undo="${esc(i.key)}">отменить</button>`
+      : `<button class="btn primary" data-v="ok">Верно</button><button class="btn" data-v="price">Цена</button><button class="btn" data-v="pack">Фасовка</button><button class="btn" data-v="kind">Вид</button><button class="btn" data-v="not_competitor">Не конкурент</button>`;
+    return `<div class="spot-item ${c ? "done" : ""}" data-key="${esc(i.key)}"><div class="grow">
+        <a href="${esc(i.url)}" target="_blank">${esc(i.name)}</a> ${i.is_ours ? '<span class="chip">Основит</span>' : ""}
+        <div class="small muted">${esc(i.site_title)}</div><div class="small">${facts}</div>
+        ${c && c.note ? `<div class="small muted">Отмечено: ${esc(c.note)}</div>` : ""}
+        <div class="spot-fix" hidden></div></div>
+      <div class="spot-actions">${actions}</div></div>`;
+  }).join("");
+  const send = async (key, verdict, value) => {
+    const r = await api("/api/spot", {key, verdict, value: value || ""});
+    if (!r.ok) { toast(r.error || "Не получилось"); return false; }
+    renderSpot(); refresh(); return true;
+  };
+  $("spot-list").querySelectorAll(".spot-item").forEach(row => {
+    const key = row.dataset.key, fix = row.querySelector(".spot-fix");
+    row.querySelectorAll("button[data-v]").forEach(b => b.onclick = () => {
+      const v = b.dataset.v;
+      if (v === "ok" || v === "not_competitor") { send(key, v); return; }
+      const ph = {price: "Цена на сайте, ₽ (необязательно)", pack: "Правильная фасовка, например 25 кг", kind: "Правильный вид, например Штукатурка цементная"}[v];
+      fix.hidden = false;
+      fix.innerHTML = `<input type="text" placeholder="${ph}" ${v === "kind" ? 'list="spot-kinds"' : ""}>${v === "kind" ? `<datalist id="spot-kinds">${kindLabels.map(k => `<option value="${esc(k)}">`).join("")}</datalist>` : ""}<button class="btn primary">Сохранить</button><button class="link small">отмена</button>`;
+      const inp = fix.querySelector("input"); inp.focus();
+      const ok = () => { if (v !== "price" && !inp.value.trim()) { toast("Укажите, как правильно"); return; } send(key, v, inp.value); };
+      fix.querySelector("button.primary").onclick = ok;
+      inp.onkeydown = (e) => { if (e.key === "Enter") ok(); };
+      fix.querySelector("button.link").onclick = () => { fix.hidden = true; fix.innerHTML = ""; };
+    });
+    const u = row.querySelector("[data-undo]");
+    if (u) u.onclick = async () => { await api("/api/spot", {key, verdict: "undo"}); renderSpot(); refresh(); };
+  });
+}
+$("spot-new").onclick = async () => {
+  const r = await api("/api/spot_new", {n: 30});
+  toast(r.n ? `В выборке ${r.n} товаров` : "Товаров пока нет — сначала соберите цены");
+  renderSpot();
+};
+
+// ------------------------------------------------------------ что отслеживаем
+function renderTrack() {
+  $("track-site").innerHTML = Object.entries(S.site_titles).map(([k, t]) => `<button data-s="${k}" class="${k === trackSite ? "on" : ""}">${t}</button>`).join("");
+  $("track-site").querySelectorAll("button").forEach(b => b.onclick = () => { trackSite = b.dataset.s; renderTrack(); });
+  const loaded = S.categories_loaded[trackSite], hasFeed = !!S.settings.sites[trackSite].feed;
+  $("cat-box").hidden = !loaded;
+  $("cat-hint").textContent = loaded ? "" : hasFeed
+      ? "Категории появятся после «Проверить связь» в Настройках или после первого сбора."
+      : "Фид этой сети не задан. Вставьте ссылку на фид в Настройках и нажмите «Проверить связь» — здесь появятся категории. Без фида отслеживайте по ссылкам ниже.";
+  $("cat-q").value = ""; searchCats();
+  renderTracked(); renderDecisions();
+}
+async function renderDecisions() {
+  const list = await api("/api/decisions");
+  $("decisions").innerHTML = list.length ? list.map(d => `<div class="list-item">
+      <span class="chip">${d.kind === "exclude" ? "не конкурент" : "проверено"}</span>
+      <div class="grow ellipsis">${d.name ? `<a href="#" data-key="${esc(d.key)}">${esc(d.name)}</a>` : esc(d.key)}</div>
+      <span class="small muted">${esc(d.site_title)} · ${when(d.ts)}</span>
+      <button class="btn" data-undo="${esc(d.key)}" data-kind="${esc(d.kind)}">Вернуть</button></div>`).join("")
+    : `<div class="empty">Решений пока нет.</div>`;
+  bindProductLinks($("decisions"));
+  $("decisions").querySelectorAll("button[data-undo]").forEach(b => b.onclick = async () => {
+    await api("/api/decide", {key: b.dataset.undo, kind: "undo"}); toast("Вернули — учтётся в следующем сборе"); renderDecisions(); refresh();
+  });
+}
+let catTimer = null;
+$("cat-q").oninput = () => { clearTimeout(catTimer); catTimer = setTimeout(searchCats, 200); };
+async function searchCats() {
+  if (!S.categories_loaded[trackSite]) { $("cat-list").innerHTML = ""; return; }
+  const list = await api(`/api/categories?site=${trackSite}&q=${encodeURIComponent($("cat-q").value)}`);
+  const have = new Set(S.tracked.filter(t => t.site === trackSite && t.kind === "category").map(t => t.ref));
+  $("cat-list").innerHTML = list.slice(0, 15).map(c => `<div class="list-item"><div class="grow ellipsis">${esc(c.path)}</div>
+     <span class="chip">${c.count} тов.</span>
+     ${have.has(c.id) ? '<span class="muted small">добавлено</span>' : `<button class="btn" data-id="${esc(c.id)}" data-n="${esc(c.name)}">Добавить</button>`}</div>`).join("")
+     || '<div class="empty">Ничего не нашлось</div>';
+  $("cat-list").querySelectorAll("button[data-id]").forEach(b => b.onclick = async () => {
+    await api("/api/track_category", {site: trackSite, id: b.dataset.id, name: b.dataset.n});
+    await refresh(); searchCats(); toast("Категория добавлена");
+  });
+}
+$("add-links").onclick = async () => {
+  const r = await api("/api/track", {site: trackSite, text: $("links").value});
+  $("links-result").innerHTML = `<div class="result ${r.errors.length ? "bad" : ""}">Добавлено: ${r.added.length}` +
+     (r.errors.length ? "<br>" + r.errors.map(esc).join("<br>") : "") + `</div>`;
+  if (r.added.length) $("links").value = "";
+  refresh();
+};
+function renderTracked() {
+  const kinds = {category: "категория фида", section: "раздел сайта", product: "товар"};
+  const rows = S.tracked.filter(t => t.site === trackSite);
+  $("tracked").innerHTML = rows.length ? rows.map(t => `<div class="list-item">
+      <span class="chip">${kinds[t.kind]}</span>
+      <div class="grow ellipsis">${t.kind === "category" ? esc(t.title || t.ref) : `<a href="${esc(t.ref)}" target="_blank">${esc(t.title || t.ref)}</a>`}</div>
+      <span class="muted small">${t.products ? t.products + " тов." + (t.ours ? ", Основит " + t.ours : "") : ""}</span>
+      <button class="x" title="Убрать" data-id="${t.id}">×</button></div>`).join("")
+    : `<div class="empty">Для ${S.site_titles[trackSite]} пока ничего не отслеживается.</div>`;
+  $("tracked").querySelectorAll("button[data-id]").forEach(b => b.onclick = async () => {
+    if (!confirm("Перестать отслеживать?")) return;
+    await api("/api/untrack", {id: +b.dataset.id}); refresh();
+  });
+}
+
+// ------------------------------------------------------------ настройки
+function renderSettings() {
+  const s = S.settings;
+  $("site-settings").innerHTML = Object.entries(s.sites).map(([k, c]) => `
+    <div class="card" data-site="${k}">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">${S.site_titles[k]}</h2>
+        <label class="check"><input type="checkbox" data-f="enabled" ${c.enabled ? "checked" : ""}> собирать</label></div>
+      <h3>Фид — основной путь</h3>
+      <label class="f">Ссылка на фид или путь к файлу</label>
+      <input type="text" data-f="feed" value="${esc(c.feed)}" placeholder="Ссылка из кабинета Admitad или «Где Слон?» (YML, CSV, XML)">
+      <label class="f">Для какого города цены в фиде</label>
+      <input type="text" data-f="feed_city" value="${esc(c.feed_city)}" placeholder="Например, Москва — см. описание программы">
+      <div class="row" style="margin-top:10px"><button class="btn" data-check="feed">Проверить связь</button></div>
+      <div class="chk-feed"></div>
+      <h3>Сайт в окне Edge — запасной путь</h3>
+      <label class="check"><input type="checkbox" data-f="edge_enabled" ${c.edge_enabled ? "checked" : ""}> дособирать с сайта то, чего нет в фиде</label>
+      <label class="f">Город в окне Edge</label>
+      <input type="text" data-f="edge_city" value="${esc(c.edge_city)}" placeholder="Пусто — не сверять">
+      <div class="row" style="margin-top:10px"><button class="btn" data-check="edge">Открыть сайт в окне сбора</button></div>
+      <div class="chk-edge"></div>
+    </div>`).join("");
+  $("brand").value = (s.brand_words || []).join(", ");
+  $("report-dir").value = s.report_dir || "";
+  $("pause").value = s.edge.pause_s; $("maxpages").value = s.edge.max_pages; $("maxsec").value = s.edge.max_section_pages;
+  $("ccn").value = s.crosscheck.n; $("edge-path").value = s.edge.path || "";
+  $("mirror-dir").value = s.backup.mirror_dir || ""; $("expert").checked = !!s.ui.expert;
+  $("expert-card").hidden = !s.ui.expert; $("rules-card").hidden = !s.ui.expert;
+  $("sched-at").value = s.schedule.at || "08:30"; $("sched-wake").checked = !!s.schedule.wake;
+  $("shots").checked = !!s.failures.screenshots;
+  $("alert-win").checked = !!s.alerts.windows; $("alert-hook").value = s.alerts.webhook_url || "";
+  $("max-age").value = s.health.max_age_h; $("sched-watch").checked = S.schedule.watchdog !== false;
+  $("schedule-card").hidden = !S.schedule.available;
+  $("sched-on").checked = !!S.schedule.enabled;
+  document.querySelectorAll("[data-check]").forEach(b => b.onclick = () => runCheck(b));
+}
+function collectSettings() {
+  const s = JSON.parse(JSON.stringify(S.settings));
+  document.querySelectorAll("#site-settings [data-site]").forEach(card => {
+    const c = s.sites[card.dataset.site];
+    card.querySelectorAll("[data-f]").forEach(el => c[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value.trim());
+  });
+  s.brand_words = $("brand").value.split(",").map(x => x.trim()).filter(Boolean);
+  s.report_dir = $("report-dir").value.trim();
+  s.edge.pause_s = +$("pause").value; s.edge.max_pages = +$("maxpages").value; s.edge.max_section_pages = +$("maxsec").value;
+  s.crosscheck.n = +$("ccn").value; s.edge.path = $("edge-path").value.trim();
+  s.failures.screenshots = $("shots").checked;
+  s.alerts.windows = $("alert-win").checked; s.alerts.webhook_url = $("alert-hook").value.trim();
+  s.health.max_age_h = +$("max-age").value || 26;
+  s.backup.mirror_dir = $("mirror-dir").value.trim(); s.ui.expert = $("expert").checked;
+  s.schedule.at = $("sched-at").value || "08:30"; s.schedule.wake = $("sched-wake").checked;
+  return s;
+}
+async function saveSettings() {
+  S.settings = await api("/api/settings", {settings: collectSettings()});
+  $("saved").textContent = "Сохранено"; setTimeout(() => $("saved").textContent = "", 2000);
+  $("expert-card").hidden = !S.settings.ui.expert; $("rules-card").hidden = !S.settings.ui.expert;
+  renderHome();
+}
+$("save").onclick = saveSettings; $("save2").onclick = async () => { await saveSettings(); toast("Сохранено"); };
+$("expert").onchange = saveSettings;
+const STV = {ok: "в порядке", warn: "внимание", fail: "плохо"};
+$("selftest-run").onclick = async () => {
+  const b = $("selftest-run"); b.disabled = true;
+  $("selftest").innerHTML = `<div class="result"><span class="spin"></span>Проверяю компьютер…</div>`;
+  try {
+    const r = await api("/api/selftest", {});
+    $("selftest").innerHTML = r.checks.map(x => `<div class="hc"><span class="badge ${x.status}">${STV[x.status]}</span><div><b>${esc(x.name)}</b> — ${esc(x.detail)}${x.hint ? `<div class="small muted">${esc(x.hint)}</div>` : ""}</div></div>`).join("");
+  } finally { b.disabled = false; }
+};
+async function runCheck(btn) {
+  await saveSettings();
+  const card = btn.closest("[data-site]"), site = card.dataset.site, edge = btn.dataset.check === "edge";
+  const box = card.querySelector(edge ? ".chk-edge" : ".chk-feed");
+  btn.disabled = true; box.innerHTML = `<div class="result"><span class="spin"></span>${edge ? "Открываю сайт в окне Edge…" : "Скачиваю и читаю фид…"}</div>`;
+  try {
+    const r = await api("/api/check", {site, edge});
+    if (edge) {
+      const e = r.edge;
+      box.innerHTML = e.error ? `<div class="result bad">${esc(e.error)}</div>` :
+        `<div class="result ${e.check_page ? "bad" : ""}">${e.check_page ? "Сайт показывает проверку браузера — пройдите её в окне." : "Сайт открылся."}
+         Город: <b>${esc(e.city || "не прочитан")}</b>. robots.txt: ${esc(e.robots)}.<br><span class="muted">${esc(e.hint)}</span></div>`;
+    } else {
+      const f = r.feed;
+      if (!f) box.innerHTML = `<div class="result bad">Сначала вставьте ссылку на фид.</div>`;
+      else if (!f.ok) box.innerHTML = `<div class="result bad">${esc(f.error)}</div>`;
+      else box.innerHTML = `<div class="result">Фид читается: формат ${esc(f.format)}, ${f.total} позиций, ${f.categories} категорий` +
+          (f.date ? `, выгрузка сети ${when(f.date)}` : "") + (f.no_price ? `, без цены ${f.no_price}` : "") +
+          `.<br>${f.sample.map(x => `<span class="muted">${esc(x.name)} — ${rub(x.price)}</span>`).join("<br>")}<br>Теперь выберите категории во вкладке «Что отслеживаем».</div>`;
+    }
+  } finally { btn.disabled = false; refresh(); }
+}
+$("sched-save").onclick = async () => {
+  await saveSettings();
+  const r = await api("/api/schedule", {enabled: $("sched-on").checked, at: $("sched-at").value, watchdog: $("sched-watch").checked, wake: $("sched-wake").checked});
+  toast(r.ok ? "Расписание обновлено" : (r.error || "Не получилось"));
+};
+// ------------------------------------------------------------ состояние
+let jLevel = "INFO";
+const ST = {ok: "в порядке", warn: "внимание", fail: "плохо"};
+const SRC = {feed: "фид", edge: "сайт"};
+const OUT = {ok: "ок", partial: "частично", blocked: "пауза", failed: "сбой", skipped: "пропущен"};
+const hhmm = (ts) => ts ? new Date(ts * 1000).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"}) : "—";
+
+async function renderCondition() {
+  const c = await api("/api/condition");
+  const h = c.health;
+  $("cond-health").innerHTML = (c.running ? `<div class="hc"><span class="badge warn">идёт</span><div>Сейчас идёт сбор (с ${hhmm(c.running.started)})</div></div>` : "") +
+    h.checks.map(x => `<div class="hc"><span class="badge ${x.status}">${ST[x.status]}</span><div><b>${esc(x.name)}</b> — ${esc(x.detail)}</div></div>`).join("");
+  const br = c.breakers.filter(b => b.state !== "closed" || b.failures);
+  $("cond-breakers").innerHTML = br.length ? `<table class="tight"><tr><th>Источник</th><th>Состояние</th><th>До</th><th>Причина</th><th></th></tr>` +
+    br.map(b => `<tr><td>${esc(b.site_title)} · ${SRC[b.source] || b.source}</td>
+      <td>${b.state === "open" && b.until * 1000 > Date.now() ? '<span class="badge warn">пауза</span>' : b.state === "half" ? "пробная попытка" : "сбоев подряд: " + b.failures}</td>
+      <td>${b.state === "open" ? hhmm(b.until) : ""}</td><td class="small">${esc(b.reason || "")}</td>
+      <td>${b.state !== "closed" ? `<button class="btn" data-reset="${b.site}|${b.source}">Снять паузу</button>` : ""}</td></tr>`).join("") + `</table>`
+    : `<div class="empty">Все источники работают, пауз нет.</div>`;
+  $("cond-breakers").querySelectorAll("[data-reset]").forEach(b => b.onclick = async () => {
+    const [site, source] = b.dataset.reset.split("|");
+    await api("/api/breaker_reset", {site, source}); toast("Пауза снята"); renderCondition(); refresh();
+  });
+  $("cond-metrics").innerHTML = c.metrics.length ? `<table class="tight"><tr><th>Сбор</th><th>Сеть · источник</th><th class="num">Время</th><th class="num">Запросов</th><th class="num">Ошибок</th><th class="num">Повторов</th><th class="num">429</th><th class="num">Капча</th><th class="num">Пустых</th><th class="num">Цен</th><th>Итог</th></tr>` +
+    c.metrics.map(m => `<tr><td>№${m.run_id} · ${hhmm(m.started)}</td><td>${esc(m.site_title)} · ${SRC[m.source] || m.source}</td>
+      <td class="num">${m.seconds < 90 ? Math.round(m.seconds) + " с" : Math.round(m.seconds / 60) + " мин"}</td><td class="num">${m.requests}</td>
+      <td class="num ${m.errors ? "pos" : ""}">${m.errors}</td><td class="num">${m.retries}</td><td class="num ${m.http_429 ? "pos" : ""}">${m.http_429}</td>
+      <td class="num ${m.captcha ? "pos" : ""}">${m.captcha}</td><td class="num">${m.empty}</td><td class="num">${m.prices}</td>
+      <td><span class="badge ${m.outcome === "ok" ? "ok" : m.outcome === "failed" ? "fail" : "warn"}">${OUT[m.outcome] || m.outcome}</span></td></tr>`).join("") + `</table>`
+    : `<div class="empty">Метрики появятся после первого сбора.</div>`;
+  $("cond-failures").innerHTML = c.failures.length ? c.failures.map(f => `<div class="list-item"><div class="grow">
+      <b>${esc(f.reason_text)}</b> <span class="small muted">${hhmm(f.ts)} · ${esc(S.site_titles[f.site] || f.site)}${f.status ? " · " + f.status : ""}</span>
+      <div class="small ellipsis muted">${esc(f.url || f.error || "")}</div></div>
+      <button class="btn" data-dump="${esc(f.dir)}">Открыть</button></div>`).join("") : `<div class="empty">Сбоев не было.</div>`;
+  $("cond-failures").querySelectorAll("[data-dump]").forEach(b => b.onclick = () => api("/api/open", {what: "dump", path: b.dataset.dump}));
+  $("cond-backups").innerHTML = c.backups.length ? c.backups.map(b => `<div class="list-item"><div class="grow">${esc(b.name)}</div>
+      <span class="small muted">${hhmm(b.ts)} · ${b.size < 1e6 ? Math.max(1, Math.round(b.size / 1e3)) + " КБ" : (b.size / 1e6).toLocaleString("ru-RU", {maximumFractionDigits: 1}) + " МБ"}</span></div>`).join("") : `<div class="empty">Копий ещё нет.</div>`;
+  loadJournal();
+}
+$("cond-refresh").onclick = renderCondition;
+$("backup-now").onclick = async () => { const r = await api("/api/backup", {}); toast(r.ok ? "Копия сделана" : "Копия не сделана — см. журнал"); renderCondition(); };
+document.querySelectorAll("[data-open]").forEach(b => b.onclick = () => api("/api/open", {what: b.dataset.open}));
+
+function renderLevels() {
+  $("j-level").innerHTML = [["DEBUG", "Всё"], ["INFO", "События"], ["WARNING", "Предупреждения"], ["ERROR", "Ошибки"]]
+    .map(([k, t]) => `<button data-l="${k}" class="${k === jLevel ? "on" : ""}">${t}</button>`).join("");
+  $("j-level").querySelectorAll("button").forEach(b => b.onclick = () => { jLevel = b.dataset.l; renderLevels(); loadJournal(); });
+}
+renderLevels();
+async function loadJournal() {
+  const r = await api(`/api/journal?n=300&level=${jLevel}`);
+  const skip = new Set(["ts", "level", "event", "msg", "trace"]);
+  $("journal").innerHTML = r.records.length ? r.records.map(x => {
+    const extra = Object.entries(x).filter(([k]) => !skip.has(k)).map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : v}`).join(" ");
+    return `<div class="jl ${esc(x.level)}"><span class="muted">${esc(x.ts.slice(5, 16).replace("T", " "))}</span> <span class="lv">${esc(x.level)}</span> ${esc(x.msg || x.event)} <span class="ex">${esc(extra)}</span>${x.trace ? `<pre class="small">${esc(x.trace)}</pre>` : ""}</div>`;
+  }).join("") : "Записей нет.";
+  $("journal").scrollTop = $("journal").scrollHeight;
+}
+
+refresh();
+</script>
+</body>
+</html>
