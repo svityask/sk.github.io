@@ -119,6 +119,20 @@ class BrowserWindow(unittest.TestCase):
         self.assertEqual([(i["code"], i["price"]) for i in res["items"]], [("12345699", 333)])
         self.assertEqual(v.meter.captcha, 1)
 
+    def test_robots_read_in_background(self):
+        """Окно уже на сайте — robots.txt читается запросом со страницы: окно не уходит на него и не «висит»."""
+        v = self.visitor()
+        v._open("https://lemanapro.ru/")
+        navigated = []
+        go = v.tab.navigate
+        v.tab.navigate = lambda url, timeout=45: navigated.append(url) or go(url, timeout)
+        self.assertFalse(v.allowed("https://lemanapro.ru/catalogue/zapret/"))
+        self.assertTrue(v.allowed("https://lemanapro.ru/catalogue/smesi/"))
+        self.assertEqual(navigated, [])
+        self.assertIn("/robots.txt", self.site.log)
+        self.assertEqual(v.tab.evaluate("location.pathname"), "/")
+        self.assertEqual(v.pages, 1)  # robots.txt не съел страницу из лимита
+
     def test_429_blocks_and_dumps(self):
         shutil.rmtree(dumps.folder(), ignore_errors=True)
         v = self.visitor()
@@ -276,6 +290,7 @@ class BrowserWindow(unittest.TestCase):
         self.assertIn("Выберите в нём город", asked[0])
         log = self.site.log
         self.assertIn("/", log)  # окно открыли на главной — для человека
+        self.assertLess(log.index("/"), log.index("/robots.txt"))  # сначала главная, robots.txt — фоном после
         self.assertIn("/catalogue/smesi/", log)
         # deep — только где нужно
         self.assertIn("/product/kley-cerezit-cm11-22222222/", log)  # 520 на полке против 450 в фиде

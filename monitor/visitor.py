@@ -24,6 +24,15 @@ from . import cdp, config, dumps, extract, guard, log, match, sites
 from .metrics import Meter
 
 MAX_SAMPLES = 40
+# robots.txt запросом со страницы сайта: окно не уходит со страницы; не ответил за 15 с — считаем непрочитанным
+ROBOTS_FETCH = """
+Promise.race([
+  fetch('/robots.txt', {credentials: 'include', cache: 'no-store'}).then(r => r.text().then(t => ({
+    status: r.status, text: t.slice(0, 500000), retryAfter: r.headers.get('retry-after') || ''
+  }))),
+  new Promise(ok => setTimeout(() => ok({status: 0, text: ''}), 15000)),
+]).catch(() => ({status: 0, text: ''}))
+"""
 
 
 class Stop(Exception):
@@ -144,21 +153,40 @@ class Visitor:
             cancelled=self.status.cancelled,
         )
 
+    def _robots_text(self, org):
+        """Текст robots.txt. Если в окне уже открыт этот сайт — читаем фоном, запросом со страницы (окно остаётся
+        на сайте, страница в лимит не идёт); иначе — открываем robots.txt в окне, как раньше."""
+        here = ""
+        try:
+            here = self.tab.evaluate("location.origin", timeout=5) or ""
+        except cdp.BrowserError:
+            pass
+        if here == org:
+            self.meter.requests += 1
+            try:
+                got = self.tab.evaluate(ROBOTS_FETCH, timeout=25) or {}
+            except cdp.BrowserError:
+                got = {}
+            status = int(got.get("status") or 0)
+            if status == 429:
+                self.tab.last_headers = {"retry-after": str(got.get("retryAfter") or "")}
+                self._blocked_429(org + "/robots.txt", status)
+            return str(got.get("text") or "") if 200 <= status < 400 else ""
+        try:
+            status = self._open(org + "/robots.txt")
+            if status == 429:
+                self._blocked_429(org + "/robots.txt", status)
+            text = self.tab.evaluate("document.body ? document.body.innerText : ''") or ""
+            return "" if status and status >= 400 else text
+        except cdp.BrowserError:
+            return ""
+
     def allowed(self, url):
         """robots.txt: можно ли открыть адрес. Не прочитался — открываем только отслеживаемое (как и так)."""
         org = sites.origin(url)
         if org not in self.robots:
             rp = urllib.robotparser.RobotFileParser()
-            text = ""
-            try:
-                status = self._open(org + "/robots.txt")
-                if status == 429:
-                    self._blocked_429(org + "/robots.txt", status)
-                text = self.tab.evaluate("document.body ? document.body.innerText : ''") or ""
-                if status and status >= 400:
-                    text = ""
-            except cdp.BrowserError:
-                text = ""
+            text = self._robots_text(org)
             if "user-agent" in text.lower():
                 rp.parse(text.splitlines())
                 self.robots[org] = rp
@@ -284,9 +312,11 @@ class Visitor:
         title = sites.SITES[site]["title"]
         home = sites.SITES[site]["home"]
         self.site = site
-        if self.allowed(home):
-            self._open(home)
+        # главную открываем сразу: это заход человека, а robots.txt — правила для того, что дальше откроет
+        # приложение; его читаем фоном, уже со страницы сайта, — окно на robots.txt не останавливается
+        self._open(home)
         self.tab.show_window(True)
+        self.allowed(home)
         ask = f"{title}: окно сбора открыто. Выберите в нём город (и магазин); если сайт попросит — пройдите проверку. "
         try:
             for attempt in range(2):
