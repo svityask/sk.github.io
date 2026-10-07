@@ -205,6 +205,7 @@ class App:
                 kind = "product"
             elif sites.is_section_url(url):
                 kind = "section"
+                url = sites.normalize_section_url(line)  # сортировка и фильтры раздела — часть адреса
             else:
                 errors.append(f"{line} — не похоже ни на раздел каталога, ни на карточку товара")
                 continue

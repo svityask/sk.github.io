@@ -6,7 +6,7 @@ import os
 import shutil
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = "2.8.1"
+VERSION = "2.9.0"
 DATA = os.environ.get("OSNOVIT_DIY_DATA") or os.path.join(ROOT, "data")
 FEEDS_DIR = os.path.join(DATA, "feeds")
 SAMPLES_DIR = os.path.join(DATA, "samples")
@@ -38,9 +38,10 @@ DEFAULTS = {
         },
     },
     "edge": {
-        "pause_s": 12,  # пауза между страницами, как у человека (±30 %)
-        "max_pages": 80,  # не больше страниц за один сбор на сеть (каждая — с паузой как у человека)
-        "max_section_pages": 30,  # страниц выдачи на один раздел: листаем до конца, но не бесконечно
+        "pause_min_s": 10,  # пауза между страницами — случайная от pause_min_s до pause_max_s, как у человека
+        "pause_max_s": 13,
+        "max_pages": 300,  # не больше страниц за один сбор на сеть (каждая — с паузой как у человека)
+        "max_section_pages": 100,  # страниц выдачи на один раздел: листаем до конца, но не бесконечно
         "wait_items_s": 10,  # сколько ждать, пока товары дорисуются на странице
         "search_pages": 2,  # страниц выдачи на один поисковый запрос
         "path": "",  # путь к msedge.exe; пусто — найти самому
@@ -118,6 +119,14 @@ def _merge(base, extra):
     return out
 
 
+def pause_range(settings) -> tuple[float, float]:
+    """Пауза между страницами сайта: от и до, секунд (не меньше 5 с; «до» не меньше «от»)."""
+    e = settings.get("edge", settings)  # и все настройки, и раздел edge
+    lo = max(5.0, float(e.get("pause_min_s") or 10))
+    hi = max(lo, float(e.get("pause_max_s") or 13))
+    return lo, hi
+
+
 def ensure_dirs():
     for d in (DATA, FEEDS_DIR, SAMPLES_DIR, BROWSER_DIR, LOGS_DIR):
         os.makedirs(d, exist_ok=True)
@@ -132,16 +141,29 @@ def load():
                 data = json.load(f)
         except (OSError, ValueError):
             data = {}
+    _upgrade(data)
     return _merge(DEFAULTS, data)
+
+
+def _upgrade(data):
+    """Настройки до 2.9: лимиты листания, оставленные по умолчанию (30 страниц на раздел, 80 за сбор), поднимаются
+    до новых — иначе раздел по-прежнему обрывался бы на 30-й странице. Свои значения пользователя не трогаем."""
+    e = data.get("edge") if isinstance(data, dict) else None
+    if not isinstance(e, dict) or "pause_min_s" in e:
+        return
+    if e.get("max_section_pages") in (5, 30):
+        e.pop("max_section_pages")
+    if e.get("max_pages") in (40, 80):
+        e.pop("max_pages")
 
 
 def save(settings):
     ensure_dirs()
     clean = _merge(DEFAULTS, settings)
     e = clean["edge"]
-    e["pause_s"] = max(5, float(e.get("pause_s") or 12))  # быстрее человека не ходим
-    e["max_pages"] = max(1, min(200, int(e.get("max_pages") or 40)))
-    e["max_section_pages"] = max(1, min(100, int(e.get("max_section_pages") or 30)))
+    e["pause_min_s"], e["pause_max_s"] = pause_range(clean)  # быстрее человека не ходим
+    e["max_pages"] = max(1, min(1000, int(e.get("max_pages") or 300)))
+    e["max_section_pages"] = max(1, min(300, int(e.get("max_section_pages") or 100)))
     clean["feed_interval_h"] = max(1, float(clean.get("feed_interval_h") or 6))
     cc = clean["crosscheck"]
     cc["n"] = max(0, min(30, int(cc.get("n") or 0)))

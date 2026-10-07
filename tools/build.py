@@ -24,7 +24,7 @@ sys.path.insert(0, ROOT)
 from monitor import config  # noqa: E402
 
 FILES = ("Запустить.cmd", "start.py", "README.md", "CHANGELOG.md")
-DIRS = ("monitor", "ui", "docs", "tests")
+DIRS = ("monitor", "ui", "config", "docs", "tests")
 SKIP_DIRS = {"__pycache__", ".mypy_cache", ".ruff_cache"}
 
 

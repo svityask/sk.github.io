@@ -5,7 +5,7 @@
 
 import re
 from typing import Any
-from urllib.parse import parse_qs, quote, unquote, urlsplit, urlunsplit
+from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlencode, urlsplit, urlunsplit
 
 SITES: dict[str, dict[str, Any]] = {
     "petrovich": {
@@ -104,6 +104,22 @@ def normalize_url(url):
     if not path.endswith("/") and "." not in path.rsplit("/", 1)[-1]:
         path += "/"
     return urlunsplit(("https", host, path, "", ""))
+
+
+TRACKING_PARAMS = {"yclid", "gclid", "fbclid", "_openstat", "erid", "admitad_uid", "tagtag_uid"}  # и все utm_*
+
+
+def normalize_section_url(url):
+    """Адрес раздела: как normalize_url, но сортировка и фильтры в параметрах остаются (без меток рекламы)."""
+    base = normalize_url(url)
+    if not base:
+        return ""
+    keep = [
+        (k, v)
+        for k, v in parse_qsl(urlsplit(unwrap_link(url) or "").query, keep_blank_values=True)
+        if not k.lower().startswith("utm_") and k.lower() not in TRACKING_PARAMS
+    ]
+    return urlunsplit(urlsplit(base)._replace(query=urlencode(keep)))
 
 
 def code_from_url(url):

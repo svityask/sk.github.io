@@ -64,6 +64,7 @@ Name: "desktopicon"; Description: "Ярлык на рабочем столе"; G
 ; Папку data не трогаем никогда.
 Type: filesandordirs; Name: "{app}\monitor"
 Type: filesandordirs; Name: "{app}\ui"
+Type: filesandordirs; Name: "{app}\config"
 Type: filesandordirs; Name: "{app}\tests"
 Type: filesandordirs; Name: "{app}\docs"
 Type: filesandordirs; Name: "{app}\python"

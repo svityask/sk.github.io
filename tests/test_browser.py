@@ -110,7 +110,7 @@ class BrowserWindow(unittest.TestCase):
         self.assertEqual(by["12345680"]["price"], 455)  # из вёрстки, без цены по карте
         self.assertEqual(by["66666666"]["via"], "разметка")
         self.assertNotIn("/catalogue/zapret/", self.site.log)  # robots.txt соблюдён
-        self.assertIn("/catalogue/shtukaturki/?page=2", self.site.log)
+        self.assertIn("/catalogue/shtukaturki/?page=2&shiftIds=c2hpZnQ6MTIz", self.site.log)  # shiftIds с 1-й
         self.assertEqual(res["city"], "Москва")
 
     def test_check_page_that_clears_itself(self):
@@ -198,16 +198,35 @@ class BrowserWindow(unittest.TestCase):
     # ---------------------------------------------------------------- листание выдачи
 
     def test_pages_by_numbers_and_dalshe(self):
-        """Петрович: «1 2 3 … Дальше» без rel="next" — листаем до конца раздела, характеристики берём из списка."""
+        """Петрович: N-я страница — тот же адрес + p=N-1, sort сохраняется; «Дальше» — кнопка без адреса."""
         v = self.visitor()
-        res = v.run_site("petrovich", [(1, "https://petrovich.ru/catalog/shtukaturki/", "Штукатурки")], [])
+        res = v.run_site(
+            "petrovich", [(1, "https://petrovich.ru/catalog/shtukaturki/?sort=review_desc", "Штукатурки")], []
+        )
         self.assertIsNone(res["stopped"])
         self.assertEqual(len(res["items"]), 6)  # 3 страницы × 2 товара
-        self.assertIn("/catalog/shtukaturki/?p=3", self.site.log)
+        pages = [p for p in self.site.log if p.startswith("/catalog/shtukaturki/")]
+        self.assertEqual(
+            pages,
+            [
+                "/catalog/shtukaturki/?sort=review_desc",
+                "/catalog/shtukaturki/?sort=review_desc&p=1",
+                "/catalog/shtukaturki/?sort=review_desc&p=2",
+            ],
+        )  # и не дальше: 3-я страница — последняя в пагинаторе
         self.assertNotIn("/catalog/shtukaturki/?tags=1", self.site.log)  # «Показать все…» — не следующая страница
         it = res["items"][0]
         self.assertEqual(it["params"].get("Вес, кг"), ("30", ""))  # из списка, без захода в карточку
         self.assertEqual(it["params"].get("Основа"), ("Гипсовая", ""))
+
+    def test_other_scheme_falls_back_to_links(self):
+        """Схема адресов не сработала (сайт не знает p и отдал ту же страницу) — 1-я заново и дальше по ссылкам."""
+        v = self.visitor()
+        res = v.run_site("petrovich", [(1, "https://petrovich.ru/catalog/staraya/", "Затирки")], [])
+        self.assertIsNone(res["stopped"])
+        self.assertEqual(len(res["items"]), 6)
+        self.assertIn("/catalog/staraya/?p=1", self.site.log)  # попытка по схеме
+        self.assertIn("/catalog/staraya/?page=3", self.site.log)  # запасной путь дошёл до конца
 
     def test_show_more_button(self):
         """Лемана: кнопка «Показать ещё» без ссылки — нажимаем, пока товары прибавляются."""

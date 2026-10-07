@@ -19,8 +19,9 @@ import subprocess
 import time
 import urllib.robotparser
 from typing import Any
+from urllib.parse import urlparse
 
-from . import cdp, config, dumps, extract, guard, log, match, sites
+from . import cdp, config, dumps, extract, guard, log, match, pager, sites
 from .metrics import Meter
 
 MAX_SAMPLES = 40
@@ -118,8 +119,8 @@ class Visitor:
             seconds -= step
 
     def _pause(self):
-        base = max(5.0, float(self.s.get("pause_s") or 12))
-        self._sleep(base * random.uniform(0.7, 1.3) - (time.time() - self._last_open))
+        lo, hi = config.pause_range(self.s)
+        self._sleep(random.uniform(lo, hi) - (time.time() - self._last_open))
 
     def _open(self, url):
         """Открывает адрес с паузой как у человека. Не открылась — один повтор через 10–20 с."""
@@ -244,6 +245,7 @@ class Visitor:
 
     def _read(self, url, site, expect_city, listing=False):
         status = self._open(url)
+        self.last_status = status
         if status == 429:
             self._blocked_429(url, status)
         if listing:
@@ -400,7 +402,7 @@ class Visitor:
         title = sites.SITES[site]["title"]
         try:
             for gid, url, sec_title in sections:
-                url = sites.normalize_url(url)
+                url = sites.normalize_section_url(url)  # sort и фильтры сохраняются при листании
                 if (
                     expect_city
                     and sites.city_from_url(url)
@@ -480,66 +482,144 @@ class Visitor:
         return res
 
     def _section(self, site, gid, url, sec_title, expect_city, res, title, tag=None, max_pages=None):
-        """Раздел целиком: страница за страницей до конца выдачи (лимит страниц на раздел и на сбор — общие).
+        """Раздел целиком, страница за страницей до конца выдачи (лимит на раздел и на сбор — общие).
 
-        Следующая страница: ссылка (rel="next", «Дальше», номер текущей + 1) — переходим по ней;
-        нет ссылки, но есть «Показать ещё» — нажимаем на той же странице. Конец раздела — когда новых товаров нет.
+        Адрес раздела подходит под схему сайта (config/sites.yaml) — листаем по схеме адресов (pager.py):
+        Петрович ?p=N-1, Лемана ПРО ?page=N&shiftIds=…; иначе (поиск, другие адреса) — по ссылкам и
+        «Показать ещё». Если схема не сработала (2-я страница пустая, та же, 404 или перенаправление) — тоже они.
         """
-        visited: set[str] = set()
-        seen: set[str] = set()
-        max_pages = max_pages or int(self.s.get("max_section_pages") or 30)
-        n = 0
+        run = _SectionRun(self, site, gid, sec_title, res, title, tag, max_pages)
+        try:
+            scheme = pager.for_url(site, url)
+            if scheme is None:
+                self._follow_links(run, url, expect_city)
+            else:
+                run.method = "url_scheme"
+                self._by_scheme(run, scheme, expect_city)
+        except Stop as e:
+            run.stop(pager.PAGE_LIMIT if "лимит" in str(e) else pager.FETCH_ERROR, str(e))
+            raise
+        except guard.Blocked as b:
+            run.stop(pager.FETCH_ERROR, b.detail or b.reason)
+            raise
 
-        def take(items):
-            new = [it for it in items if (it.get("code") or it.get("url")) not in seen]
-            for it in new:
-                seen.add(it.get("code") or it.get("url"))
-                it["group_id"] = gid
-                if tag:
-                    it["search"] = tag  # нашёлся поиском по этому запросу
-            res["items"].extend(new)
-            return new
-
-        while n < max_pages:
+    def _by_scheme(self, run, scheme, expect_city):
+        site = run.site
+        prev_sig = None
+        last_good = None  # (адрес, страница) последней удачной страницы — с неё идёт запасной путь
+        page_num = 1
+        while True:
+            if page_num > run.max_pages:
+                return run.stop(pager.PAGE_LIMIT, f"лимит {run.max_pages} страниц на раздел", note=True)
+            url = scheme.build_url(page_num)
             if not self.allowed(url):
-                res["notes"].append(f"robots.txt запрещает {url} — не открываем")
-                res["skipped"] += 1
-                return
-            self.status.set(f"{title}: раздел «{sec_title}», страница {n + 1}")
+                run.res["skipped"] += 1
+                return run.stop(pager.ROBOTS, f"robots.txt запрещает {url} — не открываем", note=True)
+            run.status(page_num, run.total)
             try:
                 page, items, via, city = self._read(url, site, expect_city, listing=True)
             except cdp.BrowserError as e:
-                self._refused(res, url, e)
-                return
-            n += 1
-            res["city"] = res["city"] or city
-            res["via"].add(via)
-            visited.add(url)
+                self._refused(run.res, url, e)
+                return run.stop(pager.FETCH_ERROR, str(e))
+            run.opened(city, via)
+            failed = ""
+            if page_num > 1:
+                if self.last_status == 404:
+                    failed = "сайт ответил 404"
+                elif not scheme.landed(page.get("url") or "", page_num):
+                    failed = f"сайт перенаправил на {page.get('url') or '?'}"
+            sig = pager.signature(items) if items else None
+            if page_num == 2 and last_good and (failed or not items or sig == prev_sig):
+                # схема адресов не сработала: вернуться на 1-ю страницу и листать по ссылкам и «Показать ещё»
+                reason = failed or ("товаров нет" if not items else "та же выдача, что на 1-й")
+                log.warning(
+                    "page.scheme_failed", f"Схема адресов не сработала ({reason}) — листаем по ссылкам", url=url
+                )
+                run.method = "fallback"
+                return self._follow_links(run, last_good[0], expect_city, reopen=True)
+            if failed:
+                return run.stop(pager.FETCH_ERROR, failed, note=True)
             if not items:
-                self.meter.empty += 1
-                self._dump("empty", url, None, page)
-                return
-            if not take(items):
-                return  # страница повторяет прошлую — конец выдачи
+                if page_num == 1:
+                    self.meter.empty += 1
+                    self._dump("empty", url, None, page)
+                return run.stop(pager.EMPTY_PAGE)
+            if sig == prev_sig:
+                return run.stop(pager.NO_NEW_ITEMS)
+            run.total = max(run.total, int(page.get("pages_total") or 0))
+            if not run.take(items, page_num):
+                return run.stop(pager.NO_NEW_ITEMS)
+            prev_sig, last_good = sig, (url, page)
+            if page_num == 1 and not (run.total > 1 or page.get("next") or page.get("more")):
+                return run.stop(pager.LAST_PAGE)  # пагинатора нет — страница одна
+            if run.total > 1 and page_num >= run.total:
+                return run.stop(pager.LAST_PAGE)
+            if page_num == 1 and scheme.requires_shift_ids:
+                token = page.get("shift_ids") or ""
+                if not token:
+                    # без shiftIds ?page=2 отдаст те же товары — по схеме дальше не идём; «Показать ещё» дублей
+                    # не даёт (новые товары проверяются), поэтому пробуем её и ссылки на этой же странице
+                    log.warning(
+                        "page.missing_shiftIds", "На 1-й странице нет shiftIds — ?page=2 без него не открываем", url=url
+                    )
+                    run.stop(pager.MISSING_SHIFT_IDS, "shiftIds не найден на 1-й странице", note=True)
+                    run.method = "fallback"
+                    return self._follow_links(run, url, expect_city, page=page)
+                scheme.extra_params["shiftIds"] = token
+            page_num += 1
+
+    def _follow_links(self, run, url, expect_city, page=None, reopen=False):
+        """Листание по странице: ссылка на следующую (rel="next", «Дальше», номер + 1) и «Показать ещё».
+
+        page — уже открытая страница (её товары взяты): начинаем сразу с поиска следующей.
+        reopen — открыть url заново, товары с него уже взяты (запасной путь после схемы адресов).
+        """
+        site = run.site
+        visited: set[str] = set()
+        while True:
+            if page is None:
+                if run.pages >= run.max_pages:
+                    return run.stop(pager.PAGE_LIMIT, f"лимит {run.max_pages} страниц на раздел", note=True)
+                if not self.allowed(url):
+                    run.res["skipped"] += 1
+                    return run.stop(pager.ROBOTS, f"robots.txt запрещает {url} — не открываем", note=True)
+                run.status(run.pages + 1, run.total)
+                try:
+                    page, items, via, city = self._read(url, site, expect_city, listing=True)
+                except cdp.BrowserError as e:
+                    self._refused(run.res, url, e)
+                    return run.stop(pager.FETCH_ERROR, str(e))
+                run.opened(city, via)
+                visited.add(url)
+                run.total = max(run.total, int(page.get("pages_total") or 0))
+                if not reopen:
+                    if not items:
+                        if run.pages == 1:
+                            self.meter.empty += 1
+                            self._dump("empty", url, None, page)
+                        return run.stop(pager.EMPTY_PAGE)
+                    if not run.take(items, run.pages):
+                        return run.stop(pager.NO_NEW_ITEMS)  # страница повторяет прошлую — конец выдачи
+                reopen = False
+            visited.add(url)
             # «Показать ещё» на той же странице, пока нет ссылки на следующую
             nxt = (page.get("next") or "").split("#")[0]
-            while (
-                not (nxt and nxt not in visited and sites.site_of(nxt) == site) and page.get("more") and n < max_pages
-            ):
-                total = f" из {page.get('pages_total')}" if (page.get("pages_total") or 0) > 1 else ""
-                self.status.set(f"{title}: раздел «{sec_title}», «Показать ещё» ({n + 1}{total})")
+            while not (nxt and nxt not in visited and sites.site_of(nxt) == site) and page.get("more"):
+                if run.pages >= run.max_pages:
+                    return run.stop(pager.PAGE_LIMIT, f"лимит {run.max_pages} страниц на раздел", note=True)
+                total = f" из {run.total}" if run.total > 1 else ""
+                self.status.set(f"{run.title}: раздел «{run.sec_title}», «Показать ещё» ({run.pages + 1}{total})")
                 if not self._show_more():
                     break
-                n += 1
+                run.pages += 1
                 page = self.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or {}
                 items, via = self._parse(page, site)
-                if not take(items):
-                    return
+                if not run.take(items, run.pages, method="show_more"):
+                    return run.stop(pager.NO_NEW_ITEMS)
                 nxt = (page.get("next") or "").split("#")[0]
             if not nxt or nxt in visited or sites.site_of(nxt) != site:
-                return
-            url = nxt  # без normalize: номер страницы — в параметрах адреса
-        res["notes"].append(f"Раздел «{sec_title}»: достигнут лимит {max_pages} страниц на раздел")
+                return run.stop(pager.LAST_PAGE)
+            url, page = nxt, None  # без normalize: номер страницы — в параметрах адреса
 
     def _show_more(self):
         """Нажать «Показать ещё» и дождаться новых карточек. Считается как страница: тот же лимит и пауза."""
@@ -604,3 +684,49 @@ class Visitor:
         it["params"] = {**extract.page_params(page), **(it.get("params") or {})}  # характеристики — для фасовки
         res["via"].add(it["via"])
         return it
+
+
+class _SectionRun:
+    """Состояние листания одного раздела: уже взятые товары, счётчик страниц, журнал (pager.SectionLog)."""
+
+    def __init__(self, v, site, gid, sec_title, res, title, tag, max_pages):
+        self.v = v
+        self.site = site
+        self.gid = gid
+        self.sec_title = sec_title
+        self.res = res
+        self.title = title
+        self.tag = tag
+        self.max_pages = max_pages or int(v.s.get("max_section_pages") or 100)
+        self.seen: set[str] = set()
+        self.pages = 0  # открыто страниц и нажатий «Показать ещё» в этом разделе
+        self.total = 0  # страниц в пагинаторе сайта (0 — неизвестно)
+        self.method = "links"
+        self.log = pager.SectionLog(sec_title, urlparse(sites.SITES[site]["home"]).hostname or site)
+
+    def status(self, page_num, total):
+        of = f" из {total}" if total > 1 else ""
+        self.v.status.set(
+            f"{self.title}: раздел «{self.sec_title}», страница {page_num}{of}, найдено {self.log.total_found}"
+        )
+
+    def opened(self, city, via):
+        self.pages += 1
+        self.res["city"] = self.res["city"] or city
+        self.res["via"].add(via)
+
+    def take(self, items, page_num, method=None):
+        new = [it for it in items if (it.get("code") or it.get("url")) not in self.seen]
+        for it in new:
+            self.seen.add(it.get("code") or it.get("url"))
+            it["group_id"] = self.gid
+            if self.tag:
+                it["search"] = self.tag  # нашёлся поиском по этому запросу
+        self.res["items"].extend(new)
+        self.log.page(page_num, len(new), method or self.method, self.total)
+        return new
+
+    def stop(self, reason, detail="", note=False):
+        self.log.stop(reason, detail)
+        if note and detail:
+            self.res["notes"].append(f"Раздел «{self.sec_title}»: {detail}")

@@ -1,0 +1,25 @@
+# Как листается выдача раздела на каждом сайте (проверено вручную и в DevTools).
+# Своё можно задать в data/sites.yaml — те же ключи, они перекрывают эти и не пропадают при обновлении.
+#
+#   base_pattern          адрес раздела: к каким адресам схема применяется ({id}, {slug} — любая часть пути;
+#                         поддомен города, например moscow., не важен)
+#   page_param            параметр номера страницы в адресе
+#   page_offset           сдвиг: в адресе стоит N + page_offset (Петрович: 2-я страница — p=1)
+#   first_page_has_param  есть ли параметр у 1-й страницы
+#   preserve_query_params сохранять параметры исходного адреса (sort, фильтры) при переходах
+#   requires_shift_ids    без shiftIds со 1-й страницы сайт отдаёт те же товары — без него дальше не идём
+
+petrovich:
+  base_pattern: "https://moscow.petrovich.ru/catalog/{id}/"
+  page_param: "p"
+  page_offset: -1
+  first_page_has_param: false
+  preserve_query_params: true
+
+lemanapro:
+  base_pattern: "https://lemanapro.ru/catalogue/{slug}/"
+  page_param: "page"
+  page_offset: 0
+  first_page_has_param: false
+  preserve_query_params: true
+  requires_shift_ids: true

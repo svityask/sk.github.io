@@ -131,6 +131,21 @@ PAGE_SCRIPT = r"""
     if (!out.next && +t === cur + 1) out.next = a.href;
   }
   out.pages_total = maxNo;
+  // shiftIds (Лемана ПРО): без него ?page=N отдаёт ту же выдачу. Ищем в ссылках пагинатора, data-атрибутах, данных
+  out.shift_ids = '';
+  for (const a of document.querySelectorAll('a[href*="shiftIds="]')) {
+    try { const v = new URL(a.href).searchParams.get('shiftIds'); if (v) { out.shift_ids = v; break; } } catch (e) {}
+  }
+  if (!out.shift_ids) {
+    for (const el of document.querySelectorAll('[data-shift-ids], [data-shiftids], [data-shift-id]')) {
+      const v = el.getAttribute('data-shift-ids') || el.getAttribute('data-shiftids') || el.getAttribute('data-shift-id');
+      if (v) { out.shift_ids = v; break; }
+    }
+  }
+  if (!out.shift_ids) {
+    const m = document.documentElement.innerHTML.match(/shiftIds(?:=|\\?["']\s*:\s*\\?["'])([^&"'\\\s<>]+)/);
+    if (m) { try { out.shift_ids = decodeURIComponent(m[1]); } catch (e) { out.shift_ids = m[1]; } }
+  }
   // «Показать ещё» — догрузка на той же странице (если перейти по ссылке нельзя)
   out.more = false;
   for (const el of document.querySelectorAll('button, a, [role="button"]')) {

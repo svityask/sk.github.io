@@ -350,12 +350,12 @@ table.tight td, table.tight th { padding: 5px 6px; font-size: 12.5px; }
     <h2>Для специалиста</h2>
     <div class="grid2">
       <div>
-        <label class="f">Пауза между страницами сайта, секунд</label>
-        <input type="number" id="pause" min="5" step="1">
+        <label class="f">Пауза между страницами сайта, секунд: от и до (случайная)</label>
+        <div style="display:flex;gap:8px"><input type="number" id="pause" min="5" step="1"><input type="number" id="pause-max" min="5" step="1"></div>
         <label class="f">Не больше страниц сайта за сбор (на сеть)</label>
-        <input type="number" id="maxpages" min="1" max="200" step="1">
+        <input type="number" id="maxpages" min="1" max="1000" step="1">
         <label class="f">Страниц выдачи на один раздел</label>
-        <input type="number" id="maxsec" min="1" max="100" step="1">
+        <input type="number" id="maxsec" min="1" max="300" step="1">
         <label class="f">Путь к Microsoft Edge (если не находится сам)</label>
         <input type="text" id="edge-path" placeholder="C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe">
       </div>
@@ -1020,7 +1020,7 @@ function renderSettings() {
   $("auto-analogs").checked = s.analogs.auto !== false; $("auto-max").value = s.analogs.max_per_kind || 40;
   $("site-search").checked = s.analogs.site_search !== false; $("own-queries").value = (s.analogs.queries || []).join("\n");
   $("report-dir").value = s.report_dir || "";
-  $("pause").value = s.edge.pause_s; $("maxpages").value = s.edge.max_pages; $("maxsec").value = s.edge.max_section_pages;
+  $("pause").value = s.edge.pause_min_s; $("pause-max").value = s.edge.pause_max_s; $("maxpages").value = s.edge.max_pages; $("maxsec").value = s.edge.max_section_pages;
   $("ccn").value = s.crosscheck.n; $("edge-path").value = s.edge.path || "";
   $("mirror-dir").value = s.backup.mirror_dir || ""; $("expert").checked = !!s.ui.expert;
   $("expert-card").hidden = !s.ui.expert; $("rules-card").hidden = !s.ui.expert;
@@ -1043,7 +1043,7 @@ function collectSettings() {
   s.analogs.site_search = $("site-search").checked;
   s.analogs.queries = $("own-queries").value.split("\n").map(x => x.trim()).filter(Boolean);
   s.report_dir = $("report-dir").value.trim();
-  s.edge.pause_s = +$("pause").value; s.edge.max_pages = +$("maxpages").value; s.edge.max_section_pages = +$("maxsec").value;
+  s.edge.pause_min_s = +$("pause").value; s.edge.pause_max_s = +$("pause-max").value; s.edge.max_pages = +$("maxpages").value; s.edge.max_section_pages = +$("maxsec").value;
   s.crosscheck.n = +$("ccn").value; s.edge.path = $("edge-path").value.trim();
   s.failures.screenshots = $("shots").checked;
   s.alerts.windows = $("alert-win").checked; s.alerts.webhook_url = $("alert-hook").value.trim();
