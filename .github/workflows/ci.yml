@@ -65,16 +65,88 @@ jobs:
       - name: Окно сбора
         run: python -m unittest discover -s tests -p "test_browser.py" -v
 
-  build:
-    needs: [lint, test]
-    runs-on: ubuntu-latest
+  package:
+    # то, что получит пользователь: ZIP с переносным Python и установщик — собрать и проверить на чистой Windows
+    needs: [lint]
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - run: python tools/build.py
+      - name: Версия
+        id: v
+        shell: bash
+        run: echo "version=$(python -c 'from monitor import config; print(config.VERSION)')" >> "$GITHUB_OUTPUT"
+      - name: Переносной Python с python.org (версия закреплена, подпись проверяется)
+        run: python tools/fetch_python.py build/python
+      - name: Архивы
+        run: |
+          python tools/build.py
+          python tools/build.py --python build/python --stage build/stage
+      - name: Проверка ZIP с Python — распаковать и запустить, как пользователь
+        run: python tools/check_dist.py zip dist/Osnovit-DIY-${{ steps.v.outputs.version }}-Windows.zip
+      - name: Установщик
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+          # подпись кода — только если в настройках репозитория заданы сертификат (PFX в base64) и пароль
+          SIGN_PFX: ${{ secrets.SIGN_PFX }}
+          SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE) { exit 1 }
+          }
+          $isccArgs = @("/DAppVersion=$env:VERSION", "/DSourceDir=$PWD\build\stage", "/DOutputDir=$PWD\dist")
+          if ($env:SIGN_PFX) {
+            $pfx = "$env:RUNNER_TEMP\osnovit.pfx"
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_PFX))
+            $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+              Sort-Object FullName -Descending | Select-Object -First 1).FullName
+            $isccArgs += '/Sosnovit=$q' + $signtool + '$q sign /f $q' + $pfx + '$q /p ' + $env:SIGN_PASSWORD +
+              ' /fd sha256 /tr http://timestamp.digicert.com /td sha256 $f'
+            $isccArgs += "/DSign"
+          }
+          & $iscc @isccArgs installer\setup.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Проверка установщика — установка, обновление, расписание, удаление
+        run: python tools/check_dist.py installer dist/Osnovit-DIY-${{ steps.v.outputs.version }}-Setup.exe
       - uses: actions/upload-artifact@v5
         with:
-          name: osnovit-diy-zip
-          path: dist/*.zip
+          name: osnovit-diy-windows
+          path: |
+            dist/*.zip
+            dist/*.exe
+
+  release:
+    # выпуск на GitHub — только по тегу v<версия> и только если всё выше прошло
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, test, browser, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: osnovit-diy-windows
+          path: dist
+      - name: Выпуск
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(python3 -c 'from monitor import config; print(config.VERSION)')
+          if [ "$GITHUB_REF_NAME" != "v$v" ]; then echo "Тег $GITHUB_REF_NAME, а версия программы $v"; exit 1; fi
+          python3 - "$v" > notes.md <<'EOF_NOTES'
+          import sys
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          head = f"## {sys.argv[1]} "
+          part = text[text.index(head):]
+          end = part.find("\n## ", 1)
+          print(part[: end if end > 0 else None].split("\n", 1)[1].strip())
+          print("\nКак установить: docs/install.md. Контрольные суммы файлов — SHA256SUMS.txt.")
+          EOF_NOTES
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Монитор Основит DIY $v" --notes-file notes.md

@@ -7,6 +7,7 @@
 Запустить.cmd --backup        резервная копия базы и настроек сейчас
 Запустить.cmd --restore ФАЙЛ  восстановить базу из копии (приложение должно быть закрыто)
 Запустить.cmd --selftest      проверить компьютер: Python, Edge, папки, Планировщик, уведомления, сеть
+Запустить.cmd --unschedule    снять задачи Планировщика (так делает удаление программы)
 """
 
 from __future__ import annotations
@@ -94,6 +95,19 @@ def run_restore(path: str) -> int:
     return 0
 
 
+def run_unschedule() -> int:
+    """Снять сбор по расписанию и проверку «сбор прошёл?». Удаление программы вызывает это первым делом,
+    иначе задачи Планировщика остались бы и каждый день сообщали об ошибке запуска."""
+    from . import schedule
+
+    if not sys.platform.startswith("win"):
+        print("Не Windows — задач Планировщика нет, снимать нечего")
+        return 0
+    r = schedule.set_schedule(False)
+    print("Расписание снято" if r.get("ok") else f"Расписание не снято: {r.get('error')}")
+    return 0
+
+
 def run_window(port: int = 0) -> int:
     from . import server
 
@@ -143,6 +157,9 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument(
         "--selftest", action="store_true", help="проверить компьютер: Python, Edge, папки, Планировщик, сеть"
     )
+    g.add_argument(
+        "--unschedule", action="store_true", help="снять задачи Планировщика (так делает удаление программы)"
+    )
     ap.add_argument("--port", type=int, default=0)
     a = ap.parse_args(argv)
     config.ensure_dirs()
@@ -158,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         return run_restore(a.restore)
     if a.selftest:
         return run_selftest()
+    if a.unschedule:
+        return run_unschedule()
     return run_window(a.port)
 
 
