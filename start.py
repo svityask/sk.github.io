@@ -5,6 +5,13 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+# вывод в файл или в другую программу (Планировщик, проверка сборки) — в UTF-8, а не в кодировке Windows:
+# иначе первая же русская строка там роняет программу
+for stream in (sys.stdout, sys.stderr):
+    try:
+        stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except (AttributeError, ValueError):
+        pass
 
 if sys.version_info < (3, 10):  # noqa: UP036 — переносной Python может оказаться старым
     print("Нужен Python 3.10 или новее. Сейчас:", sys.version.split()[0])
