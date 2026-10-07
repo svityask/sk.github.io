@@ -442,9 +442,10 @@ class App:
         try:
             v.open()
             home = sites.SITES[site]["home"]
-            v.allowed(home + "catalogue/" if site == "lemanapro" else home + "catalog/")
-            v.tab.show_window(True)
             v._open(home)
+            v.tab.show_window(True)
+            # robots.txt — фоном, со страницы сайта: окно остаётся на главной
+            v.allowed(home + "catalogue/" if site == "lemanapro" else home + "catalog/")
             page = v.tab.evaluate(extract.PAGE_SCRIPT, timeout=40) or {}
             robots = "прочитан" if v.robots.get(sites.origin(home)) else "не прочитан (открываем только отслеживаемое)"
             return {
