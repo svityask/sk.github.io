@@ -95,8 +95,9 @@ Osnovit-DIY-<версия>-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART [/
 
 ## Сборка (для разработчика)
 
-Сборки делает CI (`.github/workflows/ci.yml`, задача `package`) на каждый коммит; выпуск — по тегу
-`v<версия>` (тег должен совпадать с версией программы):
+Сборки делает CI (`.github/workflows/ci.yml`, задача `package`) на каждый коммит. Выпуск — по тегу
+`v<версия>` (тег должен совпадать с версией программы) или кнопкой: Actions → CI → Run workflow на `main` —
+тег ставится сам, если все проверки прошли:
 
 ```
 python tools/fetch_python.py build/python                         # переносной Python, подпись и модули
