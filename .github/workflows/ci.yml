@@ -3,6 +3,8 @@ name: CI
 on:
   push:
   pull_request:
+  # выпуск кнопкой: Actions → CI → Run workflow на main — тег v<версия> ставится сам после всех проверок
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -121,8 +123,8 @@ jobs:
             dist/*.exe
 
   release:
-    # выпуск на GitHub — только по тегу v<версия> и только если всё выше прошло
-    if: startsWith(github.ref, 'refs/tags/v')
+    # выпуск на GitHub — по тегу v<версия> или кнопкой на main, и только если всё выше прошло
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: [lint, test, browser, package]
     runs-on: ubuntu-latest
     permissions:
@@ -138,7 +140,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=$(python3 -c 'from monitor import config; print(config.VERSION)')
-          if [ "$GITHUB_REF_NAME" != "v$v" ]; then echo "Тег $GITHUB_REF_NAME, а версия программы $v"; exit 1; fi
+          tag="v$v"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "Тег $GITHUB_REF_NAME, а версия программы $v"; exit 1
+          fi
           python3 - "$v" > notes.md <<'EOF_NOTES'
           import sys
           text = open("CHANGELOG.md", encoding="utf-8").read()
@@ -149,4 +154,8 @@ jobs:
           print("\nКак установить: docs/install.md. Контрольные суммы файлов — SHA256SUMS.txt.")
           EOF_NOTES
           (cd dist && sha256sum * > SHA256SUMS.txt)
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Монитор Основит DIY $v" --notes-file notes.md
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber   # выпуск уже есть — обновить файлы
+          else
+            gh release create "$tag" dist/* --target "$GITHUB_SHA" --title "Монитор Основит DIY $v" --notes-file notes.md
+          fi
