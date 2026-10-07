@@ -3,7 +3,10 @@
 Отвечает по https на 127.0.0.1:<порт>; браузер запускается с --host-resolver-rules="MAP lemanapro.ru 127.0.0.1:<порт>",
 поэтому код приложения ходит на «lemanapro.ru», как в жизни. Страницы:
   /robots.txt               — запрещает /catalogue/zapret/
-  /catalogue/shtukaturki/   — две страницы выдачи: товары в вёрстке + данные, которые страница берёт fetch'ем
+  /catalogue/shtukaturki/   — две страницы выдачи: товары в вёрстке + данные, которые страница берёт fetch'ем;
+                              как на сайте: 2-я — ?page=2&shiftIds=<токен>, без shiftIds — снова 1-я
+  /catalog/shtukaturki/     — Петрович: 3 страницы, N-я — ?p=N-1, «Дальше» — <button> без адреса
+  /catalog/staraya/         — сайт с другой схемой (?page=N): схема Петровича не срабатывает → ссылки
   /product/shpaklevka…      — карточка с разметкой schema.org
   /catalogue/limit/         — 429 с Retry-After
   /catalogue/captcha/       — 403 «подтвердите, что вы не робот» (не уходит сама)
@@ -61,8 +64,19 @@ def _head(city):
     return f'<header><div class="header-region">Ваш город: {city}</div></header>'
 
 
+SHIFT = "c2hpZnQ6MTIz"  # shiftIds, как его выдаёт Лемана ПРО в ссылках пагинатора
+
+
 def _section(page, city):
-    nxt = '<a rel="next" href="/catalogue/shtukaturki/?page=2">Следующая</a>' if page == 1 else ""
+    nums = "".join(
+        f'<span class="active">{i}</span>'
+        if i == page
+        else f'<a href="/catalogue/shtukaturki/?page={i}&shiftIds={SHIFT}">{i}</a>'
+        for i in (1, 2)
+    )
+    nxt = f'<div class="pager">{nums}</div>' + (
+        f'<a rel="next" href="/catalogue/shtukaturki/?page=2&shiftIds={SHIFT}">Следующая</a>' if page == 1 else ""
+    )
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>Штукатурки — Лемана ПРО</title></head><body>
 {_head(city)}<div id="list"></div>
 <div class="card"><a href="/product/shtukaturka-volma-sloy-30-kg-12345679/">Штукатурка Волма Слой 30 кг</a>
@@ -146,23 +160,45 @@ def _card(path, city):
 #   /catalog/shtukaturki/ (Петрович) — номера «1 2 3» и «Дальше» без rel="next", по 2 товара, ?p=N;
 #   /catalogue/pokazat/   (Лемана)  — кнопка «Показать ещё» без ссылки: 2 товара + ещё по 2 за нажатие (2 раза);
 #   /catalogue/lenivo/              — товары появляются через 3 с после загрузки и ещё два — после прокрутки.
-def _pager(page, total):
+def _pager(page, total, path="/catalog/shtukaturki/", query=""):
+    """Как у Петровича: текущая — <button disabled>, остальные — ссылки ?p=N-1 (1-я — без p), «Дальше» — <button>."""
+
+    def href(i):
+        q = [query] if query else []
+        if i > 1:
+            q.append(f"p={i - 1}")
+        return path + ("?" + "&".join(q) if q else "")
+
     nums = "".join(
-        f'<span class="active">{i}</span>' if i == page else f'<a href="/catalog/shtukaturki/?p={i}">{i}</a>'
-        for i in range(1, total + 1)
+        f"<button disabled>{i}</button>" if i == page else f'<a href="{href(i)}">{i}</a>' for i in range(1, total + 1)
     )
-    nxt = f'<a href="/catalog/shtukaturki/?p={page + 1}"><span>Дальше</span> <svg></svg></a>' if page < total else ""
+    nxt = "<button><span>Дальше</span> <svg></svg></button>" if page < total else ""
     return f'<div class="pagination">{nums} {nxt}</div>'
 
 
-def _petrovich_page(page, city):
+def _petrovich_page(page, city, query=""):
     cards = "".join(
         f'<div class="card"><a href="/catalog/1234/{700000 + page * 10 + i}/">Штукатурка гипсовая Марка{page}{i} 30 кг</a>'
         f"<div>Основа: Гипсовая</div><div>Вес, кг: 30</div><span>{400 + page * 10 + i} ₽</span></div>"
         for i in range(2)
     )
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>Штукатурки — Петрович</title></head><body>
-{_head(city)}{cards}{_pager(page, 3)}<a href="/catalog/shtukaturki/?tags=1">Показать все…</a></body></html>"""
+{_head(city)}{cards}{_pager(page, 3, query=query)}<a href="/catalog/shtukaturki/?tags=1">Показать все…</a></body></html>"""
+
+
+def _staraya(page, city):
+    """Чужая схема: страницы — ?page=N, параметр p сайт не знает и отдаёт 1-ю; ссылки на номера есть."""
+    cards = "".join(
+        f'<div class="card"><a href="/catalog/1234/{800000 + page * 10 + i}/">Затирка цементная Старая{page}{i} 2 кг</a>'
+        f"<span>{200 + page * 10 + i} ₽</span></div>"
+        for i in range(2)
+    )
+    nums = "".join(
+        f'<span class="active">{i}</span>' if i == page else f'<a href="/catalog/staraya/?page={i}">{i}</a>'
+        for i in (1, 2, 3)
+    )
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>Затирки — Петрович</title></head><body>
+{_head(city)}{cards}<div class="pagination">{nums}</div></body></html>"""
 
 
 _POKAZAT = """<!doctype html><html><head><meta charset="utf-8"><title>Смеси — Лемана ПРО</title></head><body>HEAD
@@ -232,13 +268,17 @@ class FakeSite:
                     page = int(q.get("page", ["1"])[0])
                     return self.send(json.dumps(API[page], ensure_ascii=False), "application/json")
                 if p == "/catalogue/shtukaturki/":
-                    return self.send(_section(int(q.get("page", ["1"])[0]), outer.city))
+                    page = int(q.get("page", ["1"])[0]) if q.get("shiftIds") == [SHIFT] else 1
+                    return self.send(_section(page, outer.city))
                 if p == "/":
                     return self.send(f"<!doctype html><title>Лемана ПРО</title>{_head(outer.city)}<h1>Главная</h1>")
                 if p == "/search/":
                     return self.send(_search(outer.city))
                 if p == "/catalog/shtukaturki/":
-                    return self.send(_petrovich_page(int(q.get("p", ["1"])[0]), outer.city))
+                    keep = "&".join(f"{k}={v[0]}" for k, v in q.items() if k != "p")
+                    return self.send(_petrovich_page(int(q.get("p", ["0"])[0]) + 1, outer.city, keep))
+                if p == "/catalog/staraya/":
+                    return self.send(_staraya(int(q.get("page", ["1"])[0]), outer.city))
                 if p == "/catalogue/pokazat/":
                     return self.send(_POKAZAT.replace("HEAD", _head(outer.city)))
                 if p == "/catalogue/lenivo/":
