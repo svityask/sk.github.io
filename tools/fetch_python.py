@@ -48,10 +48,17 @@ def check_signature(python_exe: str) -> None:
         f"$s = Get-AuthenticodeSignature -LiteralPath '{python_exe}'; "
         "@{status = [string]$s.Status; subject = [string]$s.SignerCertificate.Subject} | ConvertTo-Json"
     )
-    out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True, check=True)
-    info = json.loads(out.stdout)
+    # PSModulePath от PowerShell 7 (так в CI) ломает загрузку модулей Windows PowerShell 5.1 — не передаём его
+    env = {k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"}
+    out = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], capture_output=True, text=True, env=env
+    )
+    try:
+        info = json.loads(out.stdout)
+    except ValueError:
+        raise SystemExit(f"Подпись python.exe не проверить: {out.stderr.strip() or out.stdout.strip()}") from None
     if info.get("status") != "Valid" or SIGNER not in (info.get("subject") or ""):
-        raise SystemExit(f"python.exe не подписан {SIGNER}: {info}")
+        raise SystemExit(f"python.exe не подписан {SIGNER}: {info} {out.stderr.strip()}")
     print(f"Подпись python.exe действительна: {info['subject']}")
 
 

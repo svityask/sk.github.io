@@ -101,7 +101,9 @@ begin
   if not DirExists(Dir) then
     Exit;
   StringChangeEx(Dir, '''', '''''', True);
+  { PSModulePath из окружения сбрасываем на системный: путь от PowerShell 7 ломает модули Windows PowerShell }
   Exec('powershell.exe', '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' +
+    '$env:PSModulePath = [Environment]::GetEnvironmentVariable(''PSModulePath'', ''Machine''); ' +
     'Get-Process python, pythonw -ErrorAction SilentlyContinue | ' +
     'Where-Object { $_.Path -and $_.Path.StartsWith(''' + Dir + ''', [StringComparison]::OrdinalIgnoreCase) } | ' +
     'Stop-Process -Force; Start-Sleep -Seconds 1"',
